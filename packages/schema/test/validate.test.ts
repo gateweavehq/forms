@@ -325,6 +325,23 @@ describe("limits inside a question", () => {
 	});
 });
 
+describe("a section's estimate of its time", () => {
+	it("is whole minutes, when the author gives one", () => {
+		const form = teaForm();
+		questionsSection(form, "you").minutes = 2;
+		const you = valid(form).sections[0];
+		expect(you?.minutes).toBe(2);
+	});
+
+	it("is not a fraction, nothing, or longer than a working day", () => {
+		for (const minutes of [0, 1.5, 601]) {
+			const form = teaForm();
+			questionsSection(form, "you").minutes = minutes;
+			expect(problemsOf(form)).toHaveLength(1);
+		}
+	});
+});
+
 describe("parseDefinition", () => {
 	it("answers with problems instead of throwing on anything at all", () => {
 		for (const input of [null, 7, "form", [], {}]) {

@@ -143,6 +143,11 @@ const sectionBase = {
 	id: idSchema,
 	title: label,
 	text: richTextSchema.optional(),
+	/**
+	 * Roughly how long the section takes, in minutes, as its author judges it. Shown on the
+	 * section's opening card as "About 3 minutes"; never counted down, and never added up.
+	 */
+	minutes: z.number().int().min(1).max(600).optional(),
 };
 
 export const questionsSectionSchema = z.strictObject({
