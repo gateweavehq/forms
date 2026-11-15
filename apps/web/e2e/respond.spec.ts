@@ -1,13 +1,17 @@
 import { expect, test } from "./fixtures";
 import {
+	autoAdvanceSwitch,
 	back,
 	CONSENT,
 	choose,
+	closeOptions,
 	expectNoProgressDisplay,
 	FORM,
 	forward,
 	heading,
 	open,
+	openOptions,
+	setAutoAdvance,
 	skipTo,
 	start,
 	stored,
@@ -150,7 +154,10 @@ test("asks every item of a group first, then the follow-ups of the items that ha
 	await expect(page.getByText("Group 1 of 3: Loaves · 4 of 4")).toBeVisible();
 	await choose(page, "Never made it");
 
-	// After the group's last item, the follow-ups are introduced: how many, and which.
+	// After the group's last item comes the look back, and only then anything about "stopped".
+	await expect(heading(page, "Your answers: Loaves")).toBeVisible();
+	await forward(page);
+	// Then the follow-ups are introduced: how many, and which.
 	await expect(
 		heading(page, "You stopped making 2 of these. A few questions about each."),
 	).toBeVisible();
@@ -190,6 +197,11 @@ test("asks every item of a group first, then the follow-ups of the items that ha
 	await choose(page, "No");
 	await forward(page);
 
+	// The next group opens with its name and its size.
+	await expect(heading(page, "Flatbreads")).toBeVisible();
+	await expect(page.getByText("3 items, one tap each")).toBeVisible();
+	await forward(page);
+
 	// Nobody stopped making a flatbread: the group has no follow-ups at all.
 	await expect(heading(page, "Pita")).toBeVisible();
 	await expect(page.getByText("Group 2 of 3: Flatbreads · 1 of 3")).toBeVisible();
@@ -198,11 +210,17 @@ test("asks every item of a group first, then the follow-ups of the items that ha
 	await choose(page, "Made it once or twice");
 	await expect(heading(page, "Flour tortillas")).toBeVisible();
 	await choose(page, "Made it once or twice");
+	await expect(heading(page, "Your answers: Flatbreads")).toBeVisible();
+	await forward(page);
+	await expect(heading(page, "Small bakes")).toBeVisible();
+	await forward(page);
 
 	await expect(heading(page, "Bagels")).toBeVisible();
 	await choose(page, STOPPED);
 	await expect(heading(page, "Soft pretzels")).toBeVisible();
 	await choose(page, "Never made it");
+	await expect(heading(page, "Your answers: Small bakes")).toBeVisible();
+	await forward(page);
 	await expect(
 		heading(page, "You stopped making 1 of these. A few questions about each."),
 	).toBeVisible();
@@ -338,12 +356,21 @@ test("offers to continue from the form's bare link on the same device", async ({
 
 test("shows the address that continues on another device", async ({ page }) => {
 	await start(page);
+	// It is in the menu, not on the card.
+	await expect(page.getByRole("button", { name: "Continue on another device" })).toBeHidden();
+	await openOptions(page);
 	await page.getByRole("button", { name: "Continue on another device" }).click();
 	const dialog = page.getByRole("dialog", { name: "Continue on another device" });
 	await expect(dialog).toBeVisible();
 	await expect(dialog.getByRole("textbox")).toHaveValue(page.url());
 	await dialog.getByRole("button", { name: "Close" }).click();
 	await expect(dialog).toBeHidden();
+	// The focus is back on what opened it, and the menu is closed behind it.
+	await expect(page.getByRole("button", { name: "Options" })).toBeFocused();
+	await expect(page.getByRole("button", { name: "Options" })).toHaveAttribute(
+		"aria-expanded",
+		"false",
+	);
 });
 
 test("keeps the detached answer apart from the response", async ({ page }) => {
@@ -436,7 +463,7 @@ test("can be completed with a keyboard alone", async ({ page, isMobile }) => {
 	await keyboard.press("Space");
 	await press("Start");
 	await expect(heading(page, "You and your kitchen")).toBeFocused();
-	await press("Continue");
+	await press("Begin");
 
 	// A new card takes the focus at its top, so a screen reader says what it is.
 	await expect(heading(page, "How often do you bake bread?")).toBeFocused();
@@ -485,7 +512,7 @@ test("can be completed with a keyboard alone", async ({ page, isMobile }) => {
 	await press("Next");
 
 	await expect(heading(page, "Nine breads")).toBeFocused();
-	await press("Continue");
+	await press("Begin");
 
 	// An item's card: the focus is on it, so its number keys answer it, and it moves on.
 	await expect(heading(page, "Sandwich loaf")).toBeFocused();
@@ -496,6 +523,17 @@ test("can be completed with a keyboard alone", async ({ page, isMobile }) => {
 		await expect(heading(page, next)).toBeFocused();
 	}
 	await keyboard.press("1");
+	// The look back: a line is a button, and Enter on it opens its card. Answered, it comes back.
+	await expect(heading(page, "Your answers: Loaves")).toBeFocused();
+	await tabTo(page, page.getByRole("button", { name: "Brioche: Never made it. Change" }));
+	await keyboard.press("Enter");
+	await expect(heading(page, "Brioche")).toBeFocused();
+	await keyboard.press("2");
+	await expect(heading(page, "Your answers: Loaves")).toBeFocused();
+	await expect(
+		page.getByRole("button", { name: "Brioche: Made it once or twice. Change" }),
+	).toBeVisible();
+	await press("Continue");
 	await expect(heading(page, /You stopped making 1 of these/)).toBeFocused();
 	await press("Continue");
 
@@ -507,12 +545,21 @@ test("can be completed with a keyboard alone", async ({ page, isMobile }) => {
 	await keyboard.press("1");
 	await press("Next");
 
-	for (const next of ["Pita", "Naan", "Flour tortillas", "Bagels", "Soft pretzels"]) {
-		await expect(heading(page, next)).toBeFocused();
-		await keyboard.press("5");
+	for (const [group, items] of [
+		["Flatbreads", ["Pita", "Naan", "Flour tortillas"]],
+		["Small bakes", ["Bagels", "Soft pretzels"]],
+	] as const) {
+		await expect(heading(page, group)).toBeFocused();
+		await press("Begin");
+		for (const next of items) {
+			await expect(heading(page, next)).toBeFocused();
+			await keyboard.press("5");
+		}
+		await expect(heading(page, `Your answers: ${group}`)).toBeFocused();
+		await press("Continue");
 	}
 	await expect(heading(page, "Last things")).toBeFocused();
-	await press("Continue");
+	await press("Begin");
 	await expect(heading(page, /Is there anything about baking at home/)).toBeFocused();
 	await keyboard.press("Tab");
 	await keyboard.type("No, thank you.");
@@ -538,7 +585,7 @@ test("can be completed with a keyboard alone", async ({ page, isMobile }) => {
 			"stopped-why": { value: { options: ["time"] } },
 			again: { value: { option: "yes" } },
 		},
-		brioche: { made: { value: { option: "never" } } },
+		brioche: { made: { value: { option: "once" }, changes: 1 } },
 		"soft-pretzels": { made: { value: { option: "often" } } },
 	});
 });
@@ -596,11 +643,16 @@ test("never shows a percentage or a progress bar", async ({ page }) => {
 test("moves on by itself only until the person turns that off", async ({ page }) => {
 	await start(page);
 	await skipTo(page, "Nine breads");
-	// The leg says beforehand that cards move on by themselves, and holds the switch.
+	// The leg says beforehand that cards move on by themselves, and where the switch is.
 	await expect(page.getByText("the next item comes up by itself")).toBeVisible();
-	const autoAdvance = page.getByRole("checkbox", { name: "Move on by itself after an answer" });
+	await expect(page.getByText("Options, at the top, turns this off.")).toBeVisible();
+	const autoAdvance = autoAdvanceSwitch(page);
+	// One menu holds it, and nothing of it is on the card.
+	await expect(autoAdvance).toBeHidden();
+	await openOptions(page);
 	await expect(autoAdvance).toBeChecked();
 	await autoAdvance.uncheck();
+	await closeOptions(page);
 	await forward(page);
 
 	await choose(page, "Never made it");
@@ -610,16 +662,17 @@ test("moves on by itself only until the person turns that off", async ({ page })
 	await expect(page.getByRole("radio", { name: "Never made it" })).toBeChecked();
 	await forward(page);
 	await expect(heading(page, "Sourdough loaf")).toBeVisible();
-	await expect(autoAdvance).not.toBeChecked();
 
 	// The choice is this browser's, and outlasts a reload.
 	await expect.poll(async () => (await stored(page)).position).toBe("i:sourdough-loaf:made");
 	await page.reload();
 	await expect(heading(page, "Sourdough loaf")).toBeVisible();
+	await openOptions(page);
 	await expect(autoAdvance).not.toBeChecked();
 
-	// Turned back on, right on the card, the next answer moves on again.
+	// Turned back on, from any card, the next answer moves on again.
 	await autoAdvance.check();
+	await closeOptions(page);
 	await choose(page, "Never made it");
 	await expect(heading(page, "Rye bread")).toBeVisible();
 });
@@ -628,24 +681,34 @@ test("announces moving on, and honours reduced motion", async ({ page }) => {
 	await start(page);
 	await skipTo(page, "Nine breads");
 	await forward(page);
-	await expect(page.locator("form")).toHaveCSS("animation-name", "card-in");
+	const card = page.locator("[data-card]");
+	// It came from the right, the way the form went.
+	await expect(card).toHaveCSS("animation-name", "card-from-right");
 	const announcement = page.locator("p[aria-live=polite].sr-only");
 	await expect(announcement).toBeEmpty();
 
 	await choose(page, "Never made it");
 	await expect(heading(page, "Sourdough loaf")).toBeVisible();
-	// Said to a screen reader without taking the focus, which is on the new card's heading.
-	await expect(announcement).toHaveText("Answer saved. Next: Sourdough loaf, 2 of 4");
+	// Said to a screen reader without taking the focus. Where the form went is not repeated
+	// here: the new card's heading has the focus and says it, with its place, once.
+	await expect(announcement).toHaveText("Answer saved.");
 	await expect(heading(page, "Sourdough loaf")).toBeFocused();
+	await expect(heading(page, "Sourdough loaf")).toHaveAccessibleDescription(
+		"Part 2 of 3 · Nine breads Group 1 of 3: Loaves · 2 of 4",
+	);
+	// One card on the page at a time: the one that left is gone, not sliding somewhere unseen.
+	await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
 
-	// A move the person made themselves is not announced as the form's doing.
+	// A move the person made themselves is not announced as the form's doing, and the card
+	// comes from the other side.
 	await back(page);
 	await expect(announcement).toBeEmpty();
+	await expect(card).toHaveCSS("animation-name", "card-from-left");
 
 	await page.emulateMedia({ reducedMotion: "reduce" });
 	await forward(page);
 	await expect(heading(page, "Sourdough loaf")).toBeVisible();
-	await expect(page.locator("form")).toHaveCSS("animation-name", "none");
+	await expect(card).toHaveCSS("animation-name", "none");
 });
 
 test("tells the person when the server would not take an answer", async ({ page }) => {
@@ -671,8 +734,11 @@ test("lets a single choice and a grid's row go back to no answer", async ({ page
 	await start(page);
 	await forward(page);
 	// A question card: an answer is given, stored, and then taken back.
+	// Its place on the card is kept, so nothing moves when it shows. Until then it is out of
+	// reach: not seen, not focusable, not in what a screen reader is given.
 	const clear = page.getByRole("button", { name: "Clear my answer", exact: true });
 	await expect(clear).toHaveCount(0);
+	await expect(page.getByText("Clear my answer", { exact: true })).toBeHidden();
 	await choose(page, "Most weeks");
 	await forward(page);
 	await expect
@@ -696,7 +762,7 @@ test("lets a single choice and a grid's row go back to no answer", async ({ page
 
 	// An item's card: clearing does not move on, and the card says Skip again.
 	await skipTo(page, "Nine breads");
-	await page.getByRole("checkbox", { name: "Move on by itself after an answer" }).uncheck();
+	await setAutoAdvance(page, false);
 	await forward(page);
 	await choose(page, "Never made it");
 	await clear.click();

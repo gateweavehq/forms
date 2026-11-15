@@ -24,32 +24,48 @@ export interface QuestionInputProps {
 	keyHints?: boolean | undefined;
 }
 
+/**
+ * An answer to pick. Chosen, it fills with the accent and its mark shows a tick. Both come from
+ * the input's own `:checked` state, in CSS, so nothing stands between the tap and the paint, and
+ * the fill does not fade in: a person who tapped should see it taken before their thumb is up.
+ */
 const box =
-	"relative flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-lg border border-input bg-card px-4 py-2.5 text-left text-base leading-snug transition-colors hover:bg-accent has-checked:border-foreground has-checked:bg-accent has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-ring motion-reduce:transition-none";
+	"relative flex min-h-12 w-full cursor-pointer touch-manipulation items-center gap-3 rounded-lg border border-input bg-card px-4 py-2.5 text-left text-base leading-snug select-none hover:bg-accent has-checked:border-brand has-checked:bg-brand has-checked:text-brand-foreground has-checked:hover:bg-brand has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-ring";
+
+/** The same look for a button that is pressed, as a ranking's are. */
+const boxPressed = "border-brand bg-brand text-brand-foreground hover:bg-brand";
 
 const field =
 	"min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base placeholder:text-muted-foreground aria-invalid:border-destructive";
 
-/** The round or square mark beside an option, filled when its hidden input is checked. */
+function Tick({ className }: { className?: string }) {
+	return (
+		<svg
+			viewBox="0 0 16 16"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="2.25"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			aria-hidden="true"
+			className={className}
+		>
+			<path d="M3.5 8.5l3 3 6-7" />
+		</svg>
+	);
+}
+
+/** The round or square mark beside an option. Its tick shows when its hidden input is checked. */
 function Mark({ shape }: { shape: "radio" | "checkbox" }) {
 	return (
 		<span
 			aria-hidden="true"
 			className={cn(
-				"grid size-5 shrink-0 place-items-center border border-muted-foreground peer-checked:border-foreground peer-checked:bg-foreground peer-checked:*:opacity-100",
+				"grid size-5 shrink-0 place-items-center border border-muted-foreground text-brand peer-checked:border-brand-foreground peer-checked:bg-brand-foreground peer-checked:*:opacity-100",
 				shape === "radio" ? "rounded-full" : "rounded-sm",
 			)}
 		>
-			<span
-				className={cn(
-					"opacity-0",
-					shape === "radio"
-						? "size-2 rounded-full bg-background"
-						: "text-xs leading-none font-bold text-background",
-				)}
-			>
-				{shape === "checkbox" ? "✓" : ""}
-			</span>
+			<Tick className="size-3.5 opacity-0" />
 		</span>
 	);
 }
@@ -146,7 +162,7 @@ function RadioList({
 								// and the card says once which keys there are.
 								<span
 									aria-hidden="true"
-									className="hidden size-6 shrink-0 items-center justify-center rounded border border-input text-xs text-muted-foreground pointer-fine:inline-flex"
+									className="hidden size-6 shrink-0 items-center justify-center rounded border border-current/25 text-xs opacity-60 pointer-fine:inline-flex"
 								>
 									{index + 1}
 								</span>
@@ -162,16 +178,26 @@ function RadioList({
 			 * A radio button, once chosen, can only be swapped for another. Someone who tapped by
 			 * mistake, or decides not to say, needs a way back to no answer: every question can
 			 * be passed, and that has to stay true after a tap.
+			 *
+			 * Its place is kept while nothing is chosen, so that the answers do not move under a
+			 * thumb at the moment one of them is tapped. Hidden, it is out of reach of the
+			 * keyboard and of screen readers as well.
 			 */}
-			{draft.option !== "" && (
+			<div className="flex items-center justify-between gap-3">
 				<Button
 					variant="ghost"
-					className="self-start"
+					className={cn("-ml-3 px-3 text-sm", draft.option === "" && "invisible")}
 					onClick={() => onDraft({ ...draft, option: "" })}
 				>
 					{strings.input.clear}
 				</Button>
-			)}
+				{keyHints && (
+					// For whoever has a keyboard. A phone does not, and is not told about keys.
+					<p className="hidden text-right text-sm text-muted-foreground pointer-fine:block">
+						{strings.card.keys(Math.min(question.options.length, 9))}
+					</p>
+				)}
+			</div>
 		</div>
 	);
 }
@@ -303,7 +329,7 @@ function Ranking({
 						// The number in the circle means nothing read aloud after the label. This says
 						// the same in words, and starts with the label a sighted person sees.
 						aria-label={`${option.label}, ${rank > 0 ? strings.input.ranked(rank) : strings.input.notRanked}`}
-						className={cn(box, rank > 0 && "border-foreground bg-accent")}
+						className={cn(box, rank > 0 && boxPressed)}
 						onClick={() => toggle(option.id)}
 					>
 						<span
@@ -311,7 +337,7 @@ function Ranking({
 							className={cn(
 								"grid size-6 shrink-0 place-items-center rounded-full border text-sm font-semibold",
 								rank > 0
-									? "border-foreground bg-foreground text-background"
+									? "border-brand-foreground bg-brand-foreground text-brand"
 									: "border-muted-foreground",
 							)}
 						>

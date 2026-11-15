@@ -20,14 +20,19 @@ function smallTargets(page: Page): Promise<string[]> {
 		const controls = document.querySelectorAll(
 			"button, summary, select, textarea, input[type=text], input[type=email], label:has(input)",
 		);
-		return [...controls]
-			.filter((control) => control.getClientRects().length > 0)
-			.map((control) => ({ control, box: control.getBoundingClientRect() }))
-			.filter(({ box }) => Math.round(box.height) < 44 || Math.round(box.width) < 44)
-			.map(
-				({ control, box }) =>
-					`${control.tagName} "${(control.textContent ?? "").trim().slice(0, 30)}" ${Math.round(box.width)}x${Math.round(box.height)}`,
-			);
+		return (
+			[...controls]
+				.filter((control) => control.getClientRects().length > 0)
+				// What a finger cannot press is not a target for one: the marks of a long group, which
+				// are left to the mouse and the keyboard.
+				.filter((control) => getComputedStyle(control).pointerEvents !== "none")
+				.map((control) => ({ control, box: control.getBoundingClientRect() }))
+				.filter(({ box }) => Math.round(box.height) < 44 || Math.round(box.width) < 44)
+				.map(
+					({ control, box }) =>
+						`${control.tagName} "${(control.textContent ?? "").trim().slice(0, 30)}" ${Math.round(box.width)}x${Math.round(box.height)}`,
+				)
+		);
 	});
 }
 
@@ -51,6 +56,11 @@ async function everyScreen(page: Page, check: () => Promise<void>): Promise<void
 		await expect(page.getByRole("button", { name: "Back" })).toBeVisible();
 		await check();
 	}
+	await page.getByRole("button", { name: "Options" }).click();
+	await check();
+	await page.getByRole("button", { name: "Continue on another device" }).click();
+	await check();
+	await page.getByRole("button", { name: "Close" }).click();
 	// The ticked state of the widest list, with the line of text an option asks for.
 	await skipTo(page, "Nine breads");
 	await check();
@@ -58,18 +68,22 @@ async function everyScreen(page: Page, check: () => Promise<void>): Promise<void
 	await page.getByText("More about it").click();
 	await check();
 	await choose(page, "Used to make it, but stopped");
+	// The second item's card has a mark to go back by.
+	await expect(heading(page, "Sourdough loaf")).toBeVisible();
+	await check();
+	await skipTo(page, "Your answers: Loaves");
+	await check();
 	await skipTo(page, /You stopped making 1 of these/);
 	await check();
 	await forward(page);
 	await choose(page, "Another reason");
 	await check();
-
-	await page.getByRole("button", { name: "Continue on another device" }).click();
+	await skipTo(page, "Flatbreads");
 	await check();
-	await page.getByRole("button", { name: "Close" }).click();
 
 	await skipTo(page, "Thank you");
 	await page.getByRole("textbox").fill("reader@example.test");
+	await page.getByText("What you answered").click();
 	await check();
 }
 

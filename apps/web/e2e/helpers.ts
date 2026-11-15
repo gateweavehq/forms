@@ -45,11 +45,12 @@ export async function start(page: Page): Promise<void> {
 
 /** Presses the card's forward button, whatever it says at the moment. */
 export async function forward(page: Page): Promise<void> {
-	await page.getByRole("button", { name: /^(Next|Skip|Continue|Finish)$/ }).click();
+	await page.getByRole("button", { name: /^(Next|Skip|Continue|Finish|Begin)$/ }).click();
 }
 
 export async function back(page: Page): Promise<void> {
-	await page.getByRole("button", { name: "Back" }).click();
+	// Exactly "Back": a group's marks are buttons too, and their names say "go back to it".
+	await page.getByRole("button", { name: "Back", exact: true }).click();
 }
 
 /**
@@ -70,6 +71,34 @@ function literal(text: string): string {
 
 async function hasTouch(page: Page): Promise<boolean> {
 	return page.evaluate(() => navigator.maxTouchPoints > 0);
+}
+
+/** The switch that stops cards from moving on by themselves. It lives in the Options menu. */
+export function autoAdvanceSwitch(page: Page): Locator {
+	return page.getByRole("checkbox", { name: "Move on by itself after an answer" });
+}
+
+/** Opens the Options menu in the header, if it is closed. */
+export async function openOptions(page: Page): Promise<void> {
+	const options = page.getByRole("button", { name: "Options" });
+	if ((await options.getAttribute("aria-expanded")) !== "true") await options.click();
+	await expect(options).toHaveAttribute("aria-expanded", "true");
+}
+
+/** Closes the Options menu the way a person would, with Escape. */
+export async function closeOptions(page: Page): Promise<void> {
+	await page.keyboard.press("Escape");
+	await expect(page.getByRole("button", { name: "Options" })).toHaveAttribute(
+		"aria-expanded",
+		"false",
+	);
+}
+
+/** Turns moving on by itself on or off, through the menu. */
+export async function setAutoAdvance(page: Page, on: boolean): Promise<void> {
+	await openOptions(page);
+	await autoAdvanceSwitch(page).setChecked(on);
+	await closeOptions(page);
 }
 
 /** Passes every card without answering until the one with this heading is shown. */
