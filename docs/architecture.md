@@ -193,17 +193,40 @@ A study that needs more than "not named" should collect contact details somewher
 
 The research is summarised in the plan (FRM-1 on the board); the design rules it led to:
 
-| Rule                                                      | Because                                                                                      |
-| --------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| No bar, no percentage; legs, groups and items in words    | A display that looks slow early raised quitting from 13% to 22%                              |
-| One item to a card, every answer visible                  | Item by item beats grids: fewer skipped answers, less straight-lining                        |
-| Status for the whole group first, then the follow-ups     | Follow-ups in place teach people to avoid the answer that opens them                         |
-| A tap moves on, only on item cards, and can be turned off | It is liked and does not raise quitting; its risk is fewer corrections, so Back is one press |
-| Moving on is said beforehand and announced                | WCAG 3.2.2 (On Input), 4.1.3 (Status Messages)                                               |
-| Number keys act only while focus is inside the card       | WCAG 2.1.4 (Character Key Shortcuts)                                                         |
-| Ranking by picking in order, never by dragging            | WCAG 2.5.7 (Dragging Movements)                                                              |
-| Controls at least 44 pixels, nothing wider than 320       | WCAG 2.5.5 (Target Size), 1.4.10 (Reflow)                                                    |
-| No timers, no points, no swiping                          | Game mechanics lowered completion in both adult experiments                                  |
+| Rule                                                      | Because                                                                                            |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| No bar, no percentage; legs, groups and items in words    | A display that looks slow early raised quitting from 13% to 22%                                    |
+| One item to a card, every answer visible                  | Item by item beats grids: fewer skipped answers, less straight-lining                              |
+| Status for the whole group first, then the follow-ups     | Follow-ups in place teach people to avoid the answer that opens them                               |
+| A tap moves on, only on item cards, and can be turned off | It is liked and does not raise quitting; its risk is fewer corrections, so Back is one press       |
+| Moving on is said beforehand and announced                | WCAG 3.2.2 (On Input), 4.1.3 (Status Messages)                                                     |
+| Number keys act only while focus is inside the card       | WCAG 2.1.4 (Character Key Shortcuts)                                                               |
+| Ranking by picking in order, never by dragging            | WCAG 2.5.7 (Dragging Movements)                                                                    |
+| Controls at least 44 pixels, nothing wider than 320       | WCAG 2.5.5 (Target Size), 1.4.10 (Reflow)                                                          |
+| No timers, no points, no swiping                          | Game mechanics lowered completion in both adult experiments                                        |
+| A look back at each group's answers before moving on      | Moving on by itself has one measured cost, fewer corrected answers; this is where a slip is caught |
+| Marks for one group's items, and nothing wider            | A handful that fills in a minute is not the bar that crawls; the whole form is never counted       |
+
+### What happens when an item's card is answered
+
+The chosen answer fills with the accent and shows a tick from the input's own `:checked` state,
+so nothing waits on a script. The card then stands still for 260 ms, leaves in 90 ms, and the
+answer is stored and the next card shown 350 ms after the tap (`PAUSE_MS` and `HOLD_MS` in
+`components/cards.tsx`; the keyframes in `styles.css`). The next card arrives in 110 ms.
+
+The leaving happens inside the pause, and the pause is two timers that do not know whether
+anything moved. A person who asked for less motion sees no slide and waits exactly as long. So
+the active time stored for an answer means the same for both: from the card being put up to the
+answer being stored, pause included, and the next card's time starts when it is put up. Back and
+the buttons move at once.
+
+The look back and the opening of a group are cards of the page, not steps of the flow
+(`lib/deck.ts`). They ask nothing, and a response's stored position is always a step: on one of
+these cards it is the step beside it.
+
+The marks of a group of up to six items are 44 pixels square each. A longer group's marks stand
+closer and are not offered to a finger at all (`pointer-events: none` under a coarse pointer):
+touch goes back with Back or from the look back. A mouse and a keyboard can still use them.
 
 ### Security
 
