@@ -203,8 +203,13 @@ export const strings = {
 			exportResponses: "Responses (CSV)",
 			exportCodebook: "Codebook (CSV)",
 			detachedLead:
-				"Answers this form keeps apart from the responses, such as an address for the results. They carry no response, no time and no order: the rows are in the order of random keys.",
-			detachedNone: "Nothing has been left yet.",
+				"Answers this form keeps apart from the responses, such as an address for the results. They carry no response and no time, and their order here is drawn anew every time the page is read.",
+			detachedOpen:
+				"These are shown once the form is closed. While it takes answers, a row that appeared here could be matched with the response that was just completed.",
+			detachedFew: (needed: number) =>
+				needed === 1
+					? "This form is closed and holds too few of these to show: 1 more is needed. Among so few, each could be matched with a response by counting."
+					: `This form is closed and holds too few of these to show: ${needed} more are needed. Among so few, each could be matched with a response by counting.`,
 			exportDetached: "Kept apart (CSV)",
 			detachedCount: (count: number) => (count === 1 ? "1 row" : `${count} rows`),
 		},
@@ -442,6 +447,7 @@ export const strings = {
 		send: "Send",
 		sendFailed: "This could not be sent. Check your connection and try again.",
 		sendBusy: "Many people are sending this right now. Wait a minute and press Send again.",
+		detachedClosed: "This form has closed in the meantime, so this was not stored.",
 		sent: "Sent. Thank you.",
 		/** The person's own answers, to look over. Closed until asked for. */
 		answersTitle: "What you answered",

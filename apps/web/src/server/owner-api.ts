@@ -15,7 +15,7 @@ import {
 	replaceDefinition,
 	setState,
 } from "./owner";
-import { loadDetached, loadRecords, versionOf } from "./results";
+import { DETACHED_MIN, loadDetached, loadRecords, versionOf } from "./results";
 
 /**
  * The most bytes an owner may send. A Tally form's page data runs to a megabyte or two, which
@@ -157,8 +157,16 @@ const routes: Array<[method: string, path: string, handler: Handler]> = [
 		"forms/:/export/detached.csv",
 		async (user, _request, [formId = ""]) => {
 			const row = await ownedForm(db, user, formId);
-			const { questions, rows } = await loadDetached(db, row);
-			return csv(`${row.id}-kept-apart`, detachedCsv(questions, rows));
+			const detached = await loadDetached(db, row);
+			if (detached.state !== "shown") {
+				throw new Refused(
+					409,
+					detached.state === "open"
+						? "What a form keeps apart can be exported once the form is closed."
+						: `What a form keeps apart can be exported once there are ${DETACHED_MIN} rows of it.`,
+				);
+			}
+			return csv(`${row.id}-kept-apart`, detachedCsv(detached.questions, detached.rows));
 		},
 	],
 	[

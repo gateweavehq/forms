@@ -74,7 +74,9 @@ export function EndPage({
 function DetachedForm({ definition }: { definition: Definition }) {
 	const [drafts, setDrafts] = useState<Record<string, Draft>>({});
 	const [problems, setProblems] = useState<Record<string, string>>({});
-	const [state, setState] = useState<"open" | "sending" | "failed" | "busy" | "sent">("open");
+	const [state, setState] = useState<"open" | "sending" | "failed" | "busy" | "sent" | "closed">(
+		"open",
+	);
 	const id = useId();
 
 	const values: Record<string, AnswerValue | null> = {};
@@ -105,14 +107,17 @@ function DetachedForm({ definition }: { definition: Definition }) {
 			await sendDetached(definition.id, answers);
 			setState("sent");
 		} catch (error) {
-			setState(error instanceof RequestFailed && error.status === 429 ? "busy" : "failed");
+			const status = error instanceof RequestFailed ? error.status : 0;
+			// The form was closed after this person finished. Their response is stored; this
+			// part is not, and trying again would not change that, so it is said and not offered.
+			setState(status === 404 ? "closed" : status === 429 ? "busy" : "failed");
 		}
 	};
 
-	if (state === "sent") {
+	if (state === "sent" || state === "closed") {
 		return (
 			<p role="status" className="rounded-lg border px-4 py-3 font-medium">
-				{strings.end.sent}
+				{state === "sent" ? strings.end.sent : strings.end.detachedClosed}
 			</p>
 		);
 	}

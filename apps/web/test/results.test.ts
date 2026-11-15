@@ -296,12 +296,12 @@ describe("the exports", () => {
 		expect(text).not.toContain("email");
 	});
 
-	it("gives what is kept apart on its own, with nothing of a response", async () => {
-		const text = await (await exported("detached")).text();
-		expect(text).toBe("email\r\nreader@example.test\r\n");
-		const html = await page("/detached");
-		expect(html).toContain("reader@example.test");
-		for (const { id } of [first, second, third]) expect(html).not.toContain(id);
+	it("does not give what is kept apart while the form is open", async () => {
+		// One address was left. Shown now, it could only be the response completed just before.
+		const file = await ownerCall("GET", `forms/${FORM}/export/detached.csv`);
+		expect(file.status).toBe(409);
+		expect(await file.text()).not.toContain("example.test");
+		expect(await page("/detached")).not.toContain("example.test");
 	});
 });
 

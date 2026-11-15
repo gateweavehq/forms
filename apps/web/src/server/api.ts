@@ -207,6 +207,10 @@ export function postComplete(request: Request, id: string): Promise<Response> {
 export function postDetached(request: Request, formId: string): Promise<Response> {
 	return answering(async () => {
 		const form = await formOf(formId);
+		// Only a form that takes answers takes these. A draft has no respondents yet, and rows
+		// added to a closed one could be told from the rest by when they came. To the sender
+		// both are a form there is not.
+		if (form.state !== "open") throw new Refusal(404, "There is no such form.");
 		const body = await readBody(request, detachedBody);
 		await withinCeiling(
 			env.DETACHED_LIMIT,

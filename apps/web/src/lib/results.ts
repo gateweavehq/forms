@@ -126,7 +126,10 @@ export const getResponse = createServerFn({ method: "GET" })
 		}
 	});
 
-/** The answers one of the signed-in person's forms keeps apart, in no order that means anything. */
+/**
+ * The answers one of the signed-in person's forms keeps apart, once it is closed and holds
+ * enough of them, in an order drawn anew each time. Before that, only why they are not shown.
+ */
 export const getDetached = createServerFn({ method: "GET" })
 	.validator(formId)
 	.handler(async ({ data: id }) => {
@@ -137,8 +140,11 @@ export const getDetached = createServerFn({ method: "GET" })
 		const { isAnswered } = await import("@gateweave/forms-schema");
 		try {
 			const row = await ownedForm(db, await currentUser(), id);
-			const { questions, rows } = await loadDetached(db, row);
+			const detached = await loadDetached(db, row);
+			if (detached.state !== "shown") return detached;
+			const { questions, rows } = detached;
 			return {
+				state: detached.state,
 				questions: questions.map(({ id: questionId, label }) => ({ id: questionId, label })),
 				rows: rows.map((answers) =>
 					questions.map((question) => {

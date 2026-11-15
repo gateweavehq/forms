@@ -147,21 +147,66 @@ export async function loadRecord(
 	};
 }
 
+/** A form shows what it keeps apart only when it holds at least this many rows. */
+export const DETACHED_MIN = 5;
+
 /**
- * The answers a form keeps apart, with the questions they answer. The rows come in the order of
- * their random keys: the order they arrived in is not stored, and must not be made up by
- * sorting on anything else. The questions are those of every version the form has had, since a
- * row does not say which it was given to.
+ * What a form keeps apart, or why it is not shown yet.
+ *
+ * - `open`: the form still takes answers. A row that appears here moments after a response
+ *   was completed belongs to that response, whatever the row itself leaves out.
+ * - `few`: closed, with fewer rows than `DETACHED_MIN`. Among so few, counting pairs them.
+ * - `shown`: closed, with enough.
  */
-export async function loadDetached(
-	db: Database,
-	row: FormRow,
-): Promise<{ questions: Question[]; rows: Array<Record<string, unknown>> }> {
+export type Detached =
+	| { state: "open" }
+	| { state: "few"; needed: number }
+	| { state: "shown"; questions: Question[]; rows: Array<Record<string, unknown>> };
+
+/** A list in an order drawn anew, each order as likely as any other. */
+function shuffled<Entry>(list: Entry[]): Entry[] {
+	const result = [...list];
+	for (let last = result.length - 1; last > 0; last--) {
+		// Drawn again when it falls in the uneven end of the range, so that no place is likelier.
+		const span = last + 1;
+		const limit = Math.floor(2 ** 32 / span) * span;
+		let drawn: number;
+		do {
+			drawn = crypto.getRandomValues(new Uint32Array(1))[0] ?? 0;
+		} while (drawn >= limit);
+		const other = drawn % span;
+		const kept = result[last] as Entry;
+		result[last] = result[other] as Entry;
+		result[other] = kept;
+	}
+	return result;
+}
+
+/**
+ * The answers a form keeps apart, with the questions they answer, for its owner.
+ *
+ * The owner sees responses arrive with their times, so a list that grew in step with them
+ * would pair each row with a response. It is therefore given only once the form is closed and
+ * holds enough rows, and in an order drawn anew on every read: not the order of arrival, which
+ * is not stored, and not one fixed order either, in which a row added after reopening the form
+ * would stand out by its place.
+ *
+ * The questions are those of every version the form has had, since a row does not say which it
+ * was given to.
+ */
+export async function loadDetached(db: Database, row: FormRow): Promise<Detached> {
+	if (row.state !== "closed") return { state: "open" };
 	const stored = await db
 		.select({ hash: definitions.hash, json: definitions.json })
 		.from(definitions)
 		.where(eq(definitions.formId, row.id))
 		.all();
+	const rows = await db
+		.select({ answers: detachedAnswer.answers })
+		.from(detachedAnswer)
+		.where(eq(detachedAnswer.formId, row.id))
+		.all();
+	if (rows.length < DETACHED_MIN) return { state: "few", needed: DETACHED_MIN - rows.length };
 	const questions = new Map<string, Question>();
 	// The current wording first, so that it is the one shown for a question every version has.
 	for (const { hash, json } of stored.sort(
@@ -171,14 +216,9 @@ export async function loadDetached(
 			if (!questions.has(question.id)) questions.set(question.id, question);
 		}
 	}
-	const rows = await db
-		.select({ answers: detachedAnswer.answers })
-		.from(detachedAnswer)
-		.where(eq(detachedAnswer.formId, row.id))
-		.orderBy(detachedAnswer.id)
-		.all();
 	return {
+		state: "shown",
 		questions: [...questions.values()],
-		rows: rows.map(({ answers }) => JSON.parse(answers) as Record<string, unknown>),
+		rows: shuffled(rows).map(({ answers }) => JSON.parse(answers) as Record<string, unknown>),
 	};
 }
