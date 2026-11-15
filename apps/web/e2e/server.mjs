@@ -2,7 +2,8 @@
 // playwright.config.ts reads it, with its own empty local database. It runs from Playwright's
 // `webServer`, so it works the same on a laptop and in CI. Run `vite build` first.
 import { spawn, spawnSync } from "node:child_process";
-import { rmSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
@@ -13,6 +14,14 @@ const port = Number(process.env.FORMS_E2E_PORT) || 4771;
 // per port, so two checkouts' runs do not wipe each other's.
 const state = resolve(root, ".wrangler", `e2e-state-${port}`);
 rmSync(state, { recursive: true, force: true });
+
+// A Worker without the secret that signs sessions serves nothing. A preview reads it from beside
+// the built Worker; the tests get one of their own, and the .dev.vars at the repository root is
+// left alone.
+writeFileSync(
+	resolve(root, "dist/server/.dev.vars"),
+	`BETTER_AUTH_SECRET=${randomBytes(32).toString("hex")}\n`,
+);
 
 // Run the tools with this Node, not through a shell: Playwright stops the server by killing this
 // process, and a shell in between would leave the server running (and Playwright waiting).

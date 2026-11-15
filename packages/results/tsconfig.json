@@ -1,0 +1,5 @@
+{
+	"extends": "../../tsconfig.base.json",
+	// No DOM and no Node types: the numbers are worked out the same in a Worker and in a test.
+	"include": ["src", "test"]
+}

@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { convertV4MiniflareOptions, Miniflare, type V4ModuleDefinition } from "miniflare";
@@ -33,14 +34,21 @@ export async function startForms({
 	origin = "https://forms.test",
 	startsPerMinute = 10_000,
 	detachedPerMinute = 10_000,
+	triesPerMinute = 10_000,
+	settings = {},
 }: {
 	origin?: string;
 	/** The ceilings on the two open addresses. High unless a test is about them. */
 	startsPerMinute?: number;
 	detachedPerMinute?: number;
+	/** How many tries at signing in or up one address gets a minute. */
+	triesPerMinute?: number;
+	/** Other settings, such as `SIGN_UP_ALLOW`. */
+	settings?: Record<string, string>;
 } = {}) {
 	const config = JSON.parse(readFileSync(join(serverDir, "wrangler.json"), "utf8")) as BuiltConfig;
 	const logs: WorkerLog[] = [];
+	const secret = randomBytes(32).toString("base64url");
 	const outbound: string[] = [];
 	// Miniflare 5 still takes its documented v4 options through this converter.
 	const mf = new Miniflare(
@@ -55,6 +63,13 @@ export async function startForms({
 					modulesRoot: serverDir,
 					compatibilityDate: config.compatibility_date,
 					compatibilityFlags: config.compatibility_flags,
+					bindings: {
+						BETTER_AUTH_SECRET: secret,
+						BETTER_AUTH_URL: origin,
+						// The made-up forms in examples/ are what the tests answer.
+						FORMS_EXAMPLES: "1",
+						...settings,
+					},
 					d1Databases: { DB: "forms-test" },
 					ratelimits: {
 						START_LIMIT: { namespace_id: "1", simple: { limit: startsPerMinute, period: 60 } },
@@ -62,6 +77,7 @@ export async function startForms({
 							namespace_id: "2",
 							simple: { limit: detachedPerMinute, period: 60 },
 						},
+						AUTH_LIMIT: { namespace_id: "3", simple: { limit: triesPerMinute, period: 60 } },
 					},
 					outboundService: (request: Request) => {
 						outbound.push(request.url);
@@ -93,9 +109,15 @@ export async function startForms({
 				body: init.body as string | undefined,
 				redirect: "manual",
 			});
-			return new Response(await response.arrayBuffer(), {
+			const headers = new Headers();
+			for (const [name, value] of response.headers) {
+				if (name !== "set-cookie") headers.append(name, value);
+			}
+			for (const cookie of response.headers.getSetCookie()) headers.append("set-cookie", cookie);
+			const empty = response.status === 204 || response.status === 304;
+			return new Response(empty ? null : await response.arrayBuffer(), {
 				status: response.status,
-				headers: [...response.headers],
+				headers,
 			});
 		},
 		/** The D1 database, for looking at what was stored. */
