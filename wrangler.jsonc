@@ -1,0 +1,26 @@
+// Forms deploys from the repository root, as its siblings do, so that a "Deploy to Cloudflare"
+// button can find this file there; the app itself lives in apps/web, which runs Wrangler and Vite
+// against it.
+{
+	"$schema": "apps/web/node_modules/wrangler/config-schema.json",
+	"name": "gateweave-forms",
+	"main": "apps/web/src/server.ts",
+	"compatibility_date": "2026-10-01",
+	"compatibility_flags": ["nodejs_compat"],
+	// Settings made in the dashboard stay through a deploy. Wrangler otherwise removes a plain-text
+	// variable it does not find here, so the next push would quietly take away a setting.
+	"keep_vars": true,
+	// Only what the Worker writes itself is kept, and it writes counts and error names. Invocation
+	// logs record each request as it came in, which would put a respondent's network address beside
+	// the id of their response. A study that promises to store no address has to mean its logs too.
+	"observability": { "enabled": true, "logs": { "invocation_logs": false } },
+	"upload_source_maps": true,
+	// Responses: one row per response, one per answer, and the answers a form keeps apart.
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "gateweave-forms",
+			"migrations_dir": "apps/web/migrations"
+		}
+	]
+}
