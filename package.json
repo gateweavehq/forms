@@ -9,6 +9,7 @@
 	},
 	"scripts": {
 		"dev": "pnpm --filter @gateweave/forms-web dev",
+		"dev:setup": "pnpm --filter @gateweave/forms-web dev:setup",
 		"build": "pnpm -r build",
 		"wrangler": "pnpm --filter @gateweave/forms-web exec wrangler --cwd ../..",
 		"typecheck": "pnpm -r typecheck",

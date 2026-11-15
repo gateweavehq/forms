@@ -10,33 +10,102 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiResponsesResponseRouteImport } from './routes/api/responses/$response'
+import { Route as ApiFormsFormDetachedRouteImport } from './routes/api/forms/$form.detached'
+import { Route as ApiFormsFormResponsesRouteImport } from './routes/api/forms/$form.responses'
+import { Route as ApiResponsesResponseCompleteRouteImport } from './routes/api/responses/$response.complete'
+import { Route as ApiResponsesResponseProgressRouteImport } from './routes/api/responses/$response.progress'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiResponsesResponseRoute = ApiResponsesResponseRouteImport.update({
+  id: '/api/responses/$response',
+  path: '/api/responses/$response',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiFormsFormDetachedRoute = ApiFormsFormDetachedRouteImport.update({
+  id: '/api/forms/$form/detached',
+  path: '/api/forms/$form/detached',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiFormsFormResponsesRoute = ApiFormsFormResponsesRouteImport.update({
+  id: '/api/forms/$form/responses',
+  path: '/api/forms/$form/responses',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiResponsesResponseCompleteRoute =
+  ApiResponsesResponseCompleteRouteImport.update({
+    id: '/complete',
+    path: '/complete',
+    getParentRoute: () => ApiResponsesResponseRoute,
+  } as any)
+const ApiResponsesResponseProgressRoute =
+  ApiResponsesResponseProgressRouteImport.update({
+    id: '/progress',
+    path: '/progress',
+    getParentRoute: () => ApiResponsesResponseRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/responses/$response': typeof ApiResponsesResponseRouteWithChildren
+  '/api/forms/$form/detached': typeof ApiFormsFormDetachedRoute
+  '/api/forms/$form/responses': typeof ApiFormsFormResponsesRoute
+  '/api/responses/$response/complete': typeof ApiResponsesResponseCompleteRoute
+  '/api/responses/$response/progress': typeof ApiResponsesResponseProgressRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/responses/$response': typeof ApiResponsesResponseRouteWithChildren
+  '/api/forms/$form/detached': typeof ApiFormsFormDetachedRoute
+  '/api/forms/$form/responses': typeof ApiFormsFormResponsesRoute
+  '/api/responses/$response/complete': typeof ApiResponsesResponseCompleteRoute
+  '/api/responses/$response/progress': typeof ApiResponsesResponseProgressRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/responses/$response': typeof ApiResponsesResponseRouteWithChildren
+  '/api/forms/$form/detached': typeof ApiFormsFormDetachedRoute
+  '/api/forms/$form/responses': typeof ApiFormsFormResponsesRoute
+  '/api/responses/$response/complete': typeof ApiResponsesResponseCompleteRoute
+  '/api/responses/$response/progress': typeof ApiResponsesResponseProgressRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/api/responses/$response'
+    | '/api/forms/$form/detached'
+    | '/api/forms/$form/responses'
+    | '/api/responses/$response/complete'
+    | '/api/responses/$response/progress'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/api/responses/$response'
+    | '/api/forms/$form/detached'
+    | '/api/forms/$form/responses'
+    | '/api/responses/$response/complete'
+    | '/api/responses/$response/progress'
+  id:
+    | '__root__'
+    | '/'
+    | '/api/responses/$response'
+    | '/api/forms/$form/detached'
+    | '/api/forms/$form/responses'
+    | '/api/responses/$response/complete'
+    | '/api/responses/$response/progress'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiResponsesResponseRoute: typeof ApiResponsesResponseRouteWithChildren
+  ApiFormsFormDetachedRoute: typeof ApiFormsFormDetachedRoute
+  ApiFormsFormResponsesRoute: typeof ApiFormsFormResponsesRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +117,62 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/responses/$response': {
+      id: '/api/responses/$response'
+      path: '/api/responses/$response'
+      fullPath: '/api/responses/$response'
+      preLoaderRoute: typeof ApiResponsesResponseRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/forms/$form/detached': {
+      id: '/api/forms/$form/detached'
+      path: '/api/forms/$form/detached'
+      fullPath: '/api/forms/$form/detached'
+      preLoaderRoute: typeof ApiFormsFormDetachedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/forms/$form/responses': {
+      id: '/api/forms/$form/responses'
+      path: '/api/forms/$form/responses'
+      fullPath: '/api/forms/$form/responses'
+      preLoaderRoute: typeof ApiFormsFormResponsesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/responses/$response/complete': {
+      id: '/api/responses/$response/complete'
+      path: '/complete'
+      fullPath: '/api/responses/$response/complete'
+      preLoaderRoute: typeof ApiResponsesResponseCompleteRouteImport
+      parentRoute: typeof ApiResponsesResponseRoute
+    }
+    '/api/responses/$response/progress': {
+      id: '/api/responses/$response/progress'
+      path: '/progress'
+      fullPath: '/api/responses/$response/progress'
+      preLoaderRoute: typeof ApiResponsesResponseProgressRouteImport
+      parentRoute: typeof ApiResponsesResponseRoute
+    }
   }
 }
 
+interface ApiResponsesResponseRouteChildren {
+  ApiResponsesResponseCompleteRoute: typeof ApiResponsesResponseCompleteRoute
+  ApiResponsesResponseProgressRoute: typeof ApiResponsesResponseProgressRoute
+}
+
+const ApiResponsesResponseRouteChildren: ApiResponsesResponseRouteChildren = {
+  ApiResponsesResponseCompleteRoute: ApiResponsesResponseCompleteRoute,
+  ApiResponsesResponseProgressRoute: ApiResponsesResponseProgressRoute,
+}
+
+const ApiResponsesResponseRouteWithChildren =
+  ApiResponsesResponseRoute._addFileChildren(ApiResponsesResponseRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiResponsesResponseRoute: ApiResponsesResponseRouteWithChildren,
+  ApiFormsFormDetachedRoute: ApiFormsFormDetachedRoute,
+  ApiFormsFormResponsesRoute: ApiFormsFormResponsesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

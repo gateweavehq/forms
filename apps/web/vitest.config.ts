@@ -9,6 +9,16 @@ export default defineConfig({
 				resolve: { tsconfigPaths: true },
 				test: { name: "unit", include: ["src/**/*.test.ts"] },
 			},
+			{
+				// The built Worker in workerd (see test/forms-worker.ts). Building takes a while.
+				test: {
+					name: "worker",
+					include: ["test/**/*.test.ts"],
+					globalSetup: ["./test/global-setup.ts"],
+					testTimeout: 30_000,
+					hookTimeout: 60_000,
+				},
+			},
 		],
 	},
 });
