@@ -1,0 +1,118 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Every job only reads the code, and a pull request's code must not get more than that.
+permissions:
+  contents: read
+
+jobs:
+  # What a pull request changes, so the jobs it cannot affect are skipped: docs alone need only
+  # lint, and the browser tests only run when the app or its dependencies change. The repository
+  # is private, where a run is paid for in minutes, so a job that cannot fail is not started.
+  # A push to main runs everything.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+      app: ${{ steps.diff.outputs.app }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+      - id: diff
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            echo "app=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # A pull request checks out the merge GitHub made; its first parent is the base.
+          code=false
+          app=false
+          while read -r file; do
+            [ -z "$file" ] && continue
+            case "$file" in
+              docs/*|*.md|.claude/*|LICENSE) ;;
+              *) code=true ;;
+            esac
+            case "$file" in
+              apps/web/*|packages/*|examples/*|package.json|pnpm-lock.yaml|pnpm-workspace.yaml|wrangler.jsonc|.node-version|.github/workflows/*) app=true ;;
+            esac
+          done <<< "$(git diff --name-only HEAD^1 HEAD)"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "app=$app" >> "$GITHUB_OUTPUT"
+          echo "Code changed: $code. App changed: $app."
+
+  # `pnpm verify`, one step for each of its four parts so that a failure names its part.
+  check:
+    needs: changes
+    # A required check that is skipped counts as passed, so `check` runs even when `changes`
+    # fails, and then fails itself rather than letting a pull request merge unchecked.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Require the change detection
+        if: needs.changes.result != 'success'
+        run: |
+          echo "::error::The changes job ended as '${{ needs.changes.result }}', so nothing was checked."
+          exit 1
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Lint and format
+        run: pnpm check
+      - name: Typecheck
+        if: needs.changes.outputs.code == 'true'
+        run: pnpm typecheck
+      - name: Test
+        if: needs.changes.outputs.code == 'true'
+        run: pnpm test
+      - name: Build
+        if: needs.changes.outputs.code == 'true'
+        run: pnpm build
+
+  # Browser tests against the production build. Separate from `check` because they are slower
+  # and need Chromium.
+  e2e:
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install Chromium
+        # With the system libraries it needs. When the runner can't reach Ubuntu's package mirror,
+        # as happens, Chromium alone: the runner's image has Chrome, and so the same libraries.
+        run: |
+          timeout 180 pnpm --filter @gateweave/forms-web exec playwright install --with-deps chromium ||
+            pnpm --filter @gateweave/forms-web exec playwright install chromium
+      - name: Build and run the browser tests
+        run: pnpm test:e2e
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          retention-days: 7
