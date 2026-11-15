@@ -11,7 +11,7 @@ beforeAll(async () => {
 afterAll(() => forms.dispose());
 
 describe("the pages", () => {
-	it("lists the forms on the first page", async () => {
+	it("lists the example forms on the first page, where the server serves them", async () => {
 		const home = await forms.fetch("/");
 		expect(home.status).toBe(200);
 		const html = await home.text();
