@@ -1,5 +1,6 @@
 import { createFileRoute, Link, redirect, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
+import { z } from "zod";
 import { LiveButton } from "#/components/live-button";
 import { getMyForms } from "#/lib/owner";
 import { owner } from "#/lib/owner-client";
@@ -16,15 +17,19 @@ export const Route = createFileRoute("/forms/")({
 });
 
 const t = strings.owner;
+const added = z.object({ added: z.number() });
 
 function FormsPage() {
 	const { user, forms, examples } = Route.useLoaderData();
 	const router = useRouter();
 	const [busy, setBusy] = useState(false);
+	const [leftOut, setLeftOut] = useState(false);
 
 	const addExamples = async () => {
 		setBusy(true);
-		await owner("POST", "examples").catch(() => undefined);
+		const result = added.safeParse(await owner("POST", "examples").catch(() => undefined));
+		// One that was answered while it was nobody's cannot be taken, like any id with answers.
+		setLeftOut(!result.success || result.data.added < examples);
 		await router.invalidate();
 		setBusy(false);
 	};
@@ -74,6 +79,11 @@ function FormsPage() {
 					>
 						{t.addExamples}
 					</LiveButton>
+					{leftOut && (
+						<p role="status" className="text-sm text-muted-foreground">
+							{t.examplesLeftOut}
+						</p>
+					)}
 				</section>
 			)}
 		</main>

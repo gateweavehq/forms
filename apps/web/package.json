@@ -17,7 +17,7 @@
 		"db:migrate:local": "wrangler d1 migrations apply DB --local --persist-to .wrangler/state",
 		"db:migrate:staging": "wrangler d1 migrations apply DB --remote --env staging --cwd ../..",
 		"auth:schema": "pnpm dlx auth@1.7.16 generate --config src/server/auth/cli.ts --output src/server/db/auth-schema.ts --yes",
-		"deploy:staging": "vite build --mode staging && wrangler deploy --cwd ../.."
+		"deploy:staging": "vite build --mode staging && node scripts/check-deploy.mjs && wrangler deploy --cwd ../.."
 	},
 	"dependencies": {
 		"@better-auth/core": "1.7.20",

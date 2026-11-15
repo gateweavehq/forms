@@ -244,6 +244,51 @@ describe("the example forms", () => {
 	});
 });
 
+describe("an example that was answered while it was nobody's", () => {
+	it("cannot be added to an account, and its answers stay out of reach", async () => {
+		const fresh = await startForms();
+		try {
+			// Anyone can answer an example a server serves. Nobody owns it yet.
+			const begun = await fresh.fetch("/api/forms/quick-feedback/responses", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ device: "phone" }),
+			});
+			expect(begun.status).toBe(201);
+			const cookie = await signUp(fresh);
+			const added = await fresh.fetch("/api/owner/examples", as(cookie, { method: "POST" }));
+			// The other example, which nobody answered, is added; this one is not.
+			expect(await added.json()).toEqual({ added: 1 });
+			const row = await fresh.db.prepare("SELECT id FROM form ORDER BY id").all();
+			expect(row.results).toEqual([{ id: "home-baking" }]);
+			const results = await fresh.fetch("/forms/quick-feedback/responses", as(cookie));
+			expect(results.status).toBe(404);
+			const file = await fresh.fetch(
+				"/api/owner/forms/quick-feedback/export/responses.csv",
+				as(cookie),
+			);
+			expect(file.status).toBe(404);
+		} finally {
+			await fresh.dispose();
+		}
+	});
+});
+
+describe("two people bringing in the same id at once", () => {
+	it("gives it to one, and tells the other it is taken", async () => {
+		const id = freshId();
+		const [first, second] = await Promise.all([signUp(forms), signUp(forms)]);
+		const responses = await Promise.all(
+			[first, second, first, second].map((cookie) =>
+				call(cookie, "POST", "forms", { definition: plantForm(id) }),
+			),
+		);
+		expect(responses.map((response) => response.status).sort()).toEqual([201, 409, 409, 409]);
+		const { results } = await forms.db.prepare("SELECT id FROM form WHERE id = ?").bind(id).all();
+		expect(results).toHaveLength(1);
+	});
+});
+
 describe("the owner's side", () => {
 	it("lists a person's own forms and nobody else's", async () => {
 		const mine = await ownerWithForm();

@@ -63,6 +63,8 @@ export const strings = {
 				? "This server has 1 example form for local development."
 				: `This server has ${count} example forms for local development.`,
 		addExamples: "Add them to my account",
+		examplesLeftOut:
+			"Not all of them could be added. An example that was answered before it belonged to anyone, or that another account has, cannot be taken.",
 		nav: {
 			overview: "Overview",
 			questions: "Questions",

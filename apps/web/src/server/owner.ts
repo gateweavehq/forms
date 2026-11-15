@@ -174,17 +174,23 @@ function checked(input: unknown): Definition {
  * Brings a form in as a draft that belongs to this person. Its id has to be free: no form has
  * it, and nothing was ever answered under it. Responses can outlive their form (an example
  * that is no longer served, an account that was removed), and whoever then took the id would
- * be shown them. `adopt` lifts that for the made-up examples, whose answers are nobody's.
+ * be shown them. There is no exception: answers given to an example before anyone owned it
+ * were given to nobody, and stay nobody's.
  */
 export async function createForm(
 	db: Database,
 	user: CurrentUser,
 	input: unknown,
-	{ state = "draft", adopt = false }: { state?: FormState; adopt?: boolean } = {},
+	state: FormState = "draft",
 ): Promise<{ id: string }> {
 	const definition = checked(input);
 	const { id } = definition;
-	const [taken, answered, kept] = await db.batch([
+	// The same words whatever holds it: this must not say whose it is, or that answers exist.
+	const taken = new Refused(
+		409,
+		`The id "${id}" is taken. A form's id is its address, so each needs its own: change "id" in the definition.`,
+	);
+	const [held, answered, kept] = await db.batch([
 		db.select({ id: forms.id }).from(forms).where(eq(forms.id, id)).limit(1),
 		db.select({ id: response.id }).from(response).where(eq(response.formId, id)).limit(1),
 		db
@@ -193,42 +199,44 @@ export async function createForm(
 			.where(eq(detachedAnswer.formId, id))
 			.limit(1),
 	]);
-	if (taken.length > 0 || (!adopt && (answered.length > 0 || kept.length > 0))) {
-		// The same words whatever holds it: this must not say whose it is, or that answers exist.
-		throw new Refused(
-			409,
-			`The id "${id}" is taken. A form's id is its address, so each needs its own: change "id" in the definition.`,
-		);
-	}
+	if (held.length > 0 || answered.length > 0 || kept.length > 0) throw taken;
 	const hash = await hashOf(definition);
 	const now = Date.now();
-	await db.batch([
-		db
-			.insert(definitions)
-			.values({ hash, formId: definition.id, json: JSON.stringify(definition) })
-			.onConflictDoNothing(),
-		db.insert(forms).values({
-			id: definition.id,
-			ownerId: user.id,
-			title: definition.title,
-			state,
-			definitionHash: hash,
-			createdAt: now,
-			updatedAt: now,
-		}),
-	]);
+	try {
+		await db.batch([
+			db
+				.insert(definitions)
+				.values({ hash, formId: id, json: JSON.stringify(definition) })
+				.onConflictDoNothing(),
+			db.insert(forms).values({
+				id,
+				ownerId: user.id,
+				title: definition.title,
+				state,
+				definitionHash: hash,
+				createdAt: now,
+				updatedAt: now,
+			}),
+		]);
+	} catch (error) {
+		// Two requests for one id at once both find it free. The table's key lets one in, and
+		// the other is told what it would have been told a moment later.
+		if (await db.select({ id: forms.id }).from(forms).where(eq(forms.id, id)).get()) throw taken;
+		throw error;
+	}
 	return { id: definition.id };
 }
 
 /**
  * Adds the made-up example forms to this person's account, open, where the deployment serves
- * examples at all. One that is already someone's is left alone.
+ * examples at all. One that is already someone's, or that was answered while it was nobody's,
+ * is left alone, as any form with that id would be.
  */
 export async function addExamples(db: Database, user: CurrentUser): Promise<number> {
 	let added = 0;
 	for (const example of examples()) {
 		try {
-			await createForm(db, user, example, { state: "open", adopt: true });
+			await createForm(db, user, example, "open");
 			added++;
 		} catch (error) {
 			if (!(error instanceof Refused)) throw error;
