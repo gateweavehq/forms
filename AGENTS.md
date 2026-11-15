@@ -113,6 +113,9 @@ silently.
   `pnpm --filter @gateweave/forms-web exec playwright install chromium`. They are not part of
   `pnpm verify`. Every test starts its own response. To run them in two checkouts at once, give
   each its own port with `FORMS_E2E_PORT` (4772 to 4779).
+- On Windows, keep the checkout in a short path. The local D1 database is a file deep under
+  `apps/web/.wrangler`, and once its full path passes 260 characters Wrangler's migration fails
+  with nothing but "internal error".
 - Every bug fix gets a test that fails without the fix. Never weaken or skip a test to make a
   change pass.
 
