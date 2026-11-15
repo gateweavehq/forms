@@ -232,6 +232,11 @@ export interface ItemSummary {
 export interface RepeatTable {
 	id: string;
 	title: string;
+	/**
+	 * The block's status questions, each of which is a table of its own: one row per item, one
+	 * column per answer. The wording has "…" where the item's name goes.
+	 */
+	status: Array<{ id: string; label: string }>;
 	groups: Array<{ id: string; title: string; items: ItemSummary[] }>;
 }
 
@@ -255,6 +260,10 @@ export function repeatTables(definition: Definition, given: ResponseRecord[]): R
 			{
 				id: section.id,
 				title: section.title,
+				status: section.block.status.map((question) => ({
+					id: question.id,
+					label: mergeItem(question.label, { label: "…", name: "…" }),
+				})),
 				groups: section.groups.map((group) => ({
 					id: group.id,
 					title: group.title,

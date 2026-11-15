@@ -370,3 +370,69 @@ describe("deleting", () => {
 		expect(await count(`SELECT count(*) AS n FROM form WHERE id = '${FORM}'`)).toBe(1);
 	});
 });
+
+describe("a form that asks two things about each item", () => {
+	// The third example: eleven herbs, a group of eight and one of three, and two status
+	// questions for each ("have you grown it", "do you cook with it").
+	const HERBS = "windowsill-herbs";
+	let herbs: Forms;
+	let cookie: string;
+
+	beforeAll(async () => {
+		herbs = await startForms();
+		cookie = await signUp(herbs);
+		const added = await herbs.fetch("/api/owner/examples", as(cookie, { method: "POST" }));
+		expect(((await added.json()) as { added: number }).added).toBe(3);
+		const answer = async (grown: string, cooked: string, why?: string) => {
+			const begun = await herbs.fetch(`/api/forms/${HERBS}/responses`, {
+				method: "POST",
+				headers: json,
+				body: JSON.stringify({ device: "phone" }),
+			});
+			const started = (await begun.json()) as Started;
+			const give = (question: string, value: unknown) =>
+				herbs.fetch(`/api/responses/${started.id}/progress`, {
+					method: "POST",
+					headers: { ...json, Authorization: `Bearer ${started.secret}` },
+					body: JSON.stringify({ answer: { question, value, item: "basil", activeMs: 1000 } }),
+				});
+			expect((await give("grown", { option: grown })).status).toBe(200);
+			expect((await give("cooked", { option: cooked })).status).toBe(200);
+			if (why) expect((await give("gave-up-why", why)).status).toBe(200);
+		};
+		// Basil: grown now and cooked with often; given up on and cooked with often.
+		await answer("now", "often");
+		await answer("stopped", "often", "It bolted in a week");
+	});
+	afterAll(() => herbs.dispose());
+
+	it("gives each of the two its own table, with every herb in both", async () => {
+		const response = await herbs.fetch(`/forms/${HERBS}/items`, as(cookie));
+		expect(response.status).toBe(200);
+		const html = await response.text();
+		const grown = html.match(
+			/<div[^>]*data-status="grown".*?(?=<div[^>]*data-status="cooked")/s,
+		)?.[0];
+		const cooked = html.slice(html.indexOf('data-status="cooked"'));
+		expect(grown).toContain("Have you grown … indoors?");
+		expect(cooked).toContain("Do you cook with …?");
+		// Eleven rows in each table.
+		expect(grown?.match(/<tr[^>]*data-item=/g)).toHaveLength(11);
+		expect(cooked.match(/<tr[^>]*data-item=/g)).toHaveLength(11);
+		// Grown: one of two has it now, one gave up. Cooked with: both often.
+		const row = (table: string) => table.match(/<tr[^>]*data-item="basil".*?<\/tr>/s)?.[0] ?? "";
+		expect(row(grown ?? "").match(/1 \(50%\)/g)).toHaveLength(2);
+		expect(row(cooked)).toContain("2 (100%)");
+		// The follow-up belongs to the first question's answer, and is under its item.
+		expect(html).toContain("It bolted in a week");
+	});
+
+	it("has a column for each of the two in the export, for every herb", async () => {
+		const file = await herbs.fetch(`/api/owner/forms/${HERBS}/export/responses.csv`, as(cookie));
+		const [header = "", ...rows] = (await file.text()).split("\r\n").filter(Boolean);
+		expect(header).toContain("basil.grown,basil.cooked,basil.gave-up-why,parsley.grown,");
+		expect(header.split(",").filter((name) => name.endsWith(".cooked"))).toHaveLength(11);
+		expect(rows).toHaveLength(2);
+		expect(rows.join()).toContain(",stopped,often,It bolted in a week,");
+	});
+});

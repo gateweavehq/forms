@@ -17,10 +17,12 @@ export const Route = createFileRoute("/forms/$form/items")({
 
 const t = strings.owner.results;
 
-/** The options of an item's first status question, which is what the table's columns are. */
-function statusOf(item: ItemSummary) {
-	const [first] = item.status;
-	return first?.tally.kind === "options" ? { ...first, options: first.tally.options } : undefined;
+/** One of an item's status questions with its options, which are a table's columns. */
+function statusOf(item: ItemSummary, index: number) {
+	const question = item.status[index];
+	return question?.tally.kind === "options"
+		? { ...question, options: question.tally.options }
+		: undefined;
 }
 
 function ItemsPage() {
@@ -36,14 +38,9 @@ function ItemsPage() {
 }
 
 function Table({ table }: { table: RepeatTable }) {
-	const columns = statusOf(
-		table.groups[0]?.items[0] ?? { id: "", label: "", status: [], followUps: [] },
-	);
 	const items = table.groups.flatMap((group) => group.items);
-	// Everything but the first status question as a table's cell: each needs room for its own
-	// kind of answer, and most were shown to few.
 	const more = items.flatMap((item) =>
-		[...(columns ? item.status.slice(1) : item.status), ...item.followUps]
+		item.followUps
 			.filter((question) => question.answered > 0)
 			.map((question) => ({ item, question })),
 	);
@@ -51,93 +48,17 @@ function Table({ table }: { table: RepeatTable }) {
 	return (
 		<section className="flex flex-col gap-4" data-section={table.id}>
 			<h2 className="text-lg font-semibold break-words">{table.title}</h2>
-			{columns &&
-				table.groups.map((group) => (
-					<div key={group.id} className="flex flex-col gap-2">
-						<h3 className="font-medium break-words">{group.title}</h3>
-
-						{/* A desk has room for the statuses side by side. */}
-						<div className="hidden overflow-x-auto rounded-xl border md:block">
-							<table className="w-full text-left text-sm">
-								<thead className="bg-muted text-muted-foreground">
-									<tr>
-										<th scope="col" className="px-3 py-2 font-medium">
-											{t.item}
-										</th>
-										<th scope="col" className="px-3 py-2 font-medium">
-											{t.itemAnswered}
-										</th>
-										{columns.options.map((option) => (
-											<th key={option.id} scope="col" className="px-3 py-2 font-medium">
-												{option.label}
-											</th>
-										))}
-										<th scope="col" className="px-3 py-2 font-medium">
-											{t.itemTime}
-										</th>
-									</tr>
-								</thead>
-								<tbody>
-									{group.items.map((item) => {
-										const status = statusOf(item);
-										return (
-											<tr key={item.id} className="border-t align-top" data-item={item.id}>
-												<th scope="row" className="px-3 py-2 font-medium break-words">
-													{item.label}
-												</th>
-												<td className="px-3 py-2 tabular-nums">{status?.answered ?? 0}</td>
-												{status?.options.map((option) => (
-													<td key={option.id} className="px-3 py-2" data-option={option.id}>
-														<span className="tabular-nums">
-															{shareOf(option.count, status.answered)}
-														</span>
-														<Bar
-															share={status.answered === 0 ? 0 : option.count / status.answered}
-														/>
-													</td>
-												))}
-												<td className="px-3 py-2 tabular-nums">
-													{status?.medianMs == null ? "" : duration(status.medianMs)}
-												</td>
-											</tr>
-										);
-									})}
-								</tbody>
-							</table>
-						</div>
-
-						{/* A phone does not: each item is its own short list. */}
-						<ul className="flex flex-col gap-2 md:hidden">
-							{group.items.map((item) => {
-								const status = statusOf(item);
-								return (
-									<li key={item.id} className="flex flex-col gap-2 rounded-xl border p-3">
-										<div className="flex items-baseline justify-between gap-3">
-											<span className="min-w-0 font-medium break-words">{item.label}</span>
-											<span className="shrink-0 text-sm text-muted-foreground">
-												{t.itemAnswered}: {status?.answered ?? 0}
-												{status?.medianMs != null && ` · ${duration(status.medianMs)}`}
-											</span>
-										</div>
-										<ul className="flex flex-col gap-1.5 text-sm">
-											{status?.options.map((option) => (
-												<li key={option.id} className="flex flex-col gap-0.5">
-													<div className="flex items-baseline justify-between gap-3">
-														<span className="min-w-0 break-words">{option.label}</span>
-														<span className="shrink-0 tabular-nums">
-															{shareOf(option.count, status.answered)}
-														</span>
-													</div>
-													<Bar share={status.answered === 0 ? 0 : option.count / status.answered} />
-												</li>
-											))}
-										</ul>
-									</li>
-								);
-							})}
-						</ul>
-					</div>
-				))}
+			{/* A block can ask more than one thing about each item. Each is a table of its own. */}
+			{table.status.map((question, index) => (
+				<div key={question.id} className="flex flex-col gap-4" data-status={question.id}>
+					{table.status.length > 1 && (
+						<h3 className="text-base font-semibold break-words">{question.label}</h3>
+					)}
+					{table.groups.map((group) => (
+						<StatusGroup key={group.id} title={group.title} items={group.items} index={index} />
+					))}
+				</div>
+			))}
 
 			<div className="flex flex-col gap-2">
 				<h3 className="font-medium">{t.followUps}</h3>
@@ -162,5 +83,102 @@ function Table({ table }: { table: RepeatTable }) {
 				})}
 			</div>
 		</section>
+	);
+}
+
+/** One group's items against one status question: a table at a desk, a card each on a phone. */
+function StatusGroup({
+	title,
+	items,
+	index,
+}: {
+	title: string;
+	items: ItemSummary[];
+	/** Which of the block's status questions. */
+	index: number;
+}) {
+	const columns = items[0] ? statusOf(items[0], index) : undefined;
+	if (!columns) return null;
+	return (
+		<div className="flex flex-col gap-2">
+			<h4 className="font-medium break-words">{title}</h4>
+
+			{/* A desk has room for the statuses side by side. */}
+			<div className="hidden overflow-x-auto rounded-xl border md:block">
+				<table className="w-full text-left text-sm">
+					<thead className="bg-muted text-muted-foreground">
+						<tr>
+							<th scope="col" className="px-3 py-2 font-medium">
+								{t.item}
+							</th>
+							<th scope="col" className="px-3 py-2 font-medium">
+								{t.itemAnswered}
+							</th>
+							{columns.options.map((option) => (
+								<th key={option.id} scope="col" className="px-3 py-2 font-medium">
+									{option.label}
+								</th>
+							))}
+							<th scope="col" className="px-3 py-2 font-medium">
+								{t.itemTime}
+							</th>
+						</tr>
+					</thead>
+					<tbody>
+						{items.map((item) => {
+							const status = statusOf(item, index);
+							return (
+								<tr key={item.id} className="border-t align-top" data-item={item.id}>
+									<th scope="row" className="px-3 py-2 font-medium break-words">
+										{item.label}
+									</th>
+									<td className="px-3 py-2 tabular-nums">{status?.answered ?? 0}</td>
+									{status?.options.map((option) => (
+										<td key={option.id} className="px-3 py-2" data-option={option.id}>
+											<span className="tabular-nums">{shareOf(option.count, status.answered)}</span>
+											<Bar share={status.answered === 0 ? 0 : option.count / status.answered} />
+										</td>
+									))}
+									<td className="px-3 py-2 tabular-nums">
+										{status?.medianMs == null ? "" : duration(status.medianMs)}
+									</td>
+								</tr>
+							);
+						})}
+					</tbody>
+				</table>
+			</div>
+
+			{/* A phone does not: each item is its own short list. */}
+			<ul className="flex flex-col gap-2 md:hidden">
+				{items.map((item) => {
+					const status = statusOf(item, index);
+					return (
+						<li key={item.id} className="flex flex-col gap-2 rounded-xl border p-3">
+							<div className="flex items-baseline justify-between gap-3">
+								<span className="min-w-0 font-medium break-words">{item.label}</span>
+								<span className="shrink-0 text-sm text-muted-foreground">
+									{t.itemAnswered}: {status?.answered ?? 0}
+									{status?.medianMs != null && ` · ${duration(status.medianMs)}`}
+								</span>
+							</div>
+							<ul className="flex flex-col gap-1.5 text-sm">
+								{status?.options.map((option) => (
+									<li key={option.id} className="flex flex-col gap-0.5">
+										<div className="flex items-baseline justify-between gap-3">
+											<span className="min-w-0 break-words">{option.label}</span>
+											<span className="shrink-0 tabular-nums">
+												{shareOf(option.count, status.answered)}
+											</span>
+										</div>
+										<Bar share={status.answered === 0 ? 0 : option.count / status.answered} />
+									</li>
+								))}
+							</ul>
+						</li>
+					);
+				})}
+			</ul>
+		</div>
 	);
 }

@@ -253,6 +253,10 @@ describe("a repeat section's table", () => {
 		return tally?.kind === "options" ? tally.options.map((option) => option.count) : [];
 	};
 
+	it("names the status questions its columns belong to, without an item's name", () => {
+		expect(table?.status).toEqual([{ id: "played", label: "Have you played …?" }]);
+	});
+
 	it("has every item in its group, in the form's order", () => {
 		expect(table?.groups.map((group) => [group.title, group.items.map(({ id }) => id)])).toEqual([
 			["Classics", ["chess", "go", "draughts"]],

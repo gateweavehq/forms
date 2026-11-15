@@ -80,67 +80,65 @@ export function YourAnswers({
 	};
 
 	return (
-		<>
-			<dialog
-				ref={dialog}
-				aria-labelledby={titleId}
-				onClose={onClose}
-				className="m-auto w-[min(30rem,calc(100vw-2rem))] rounded-xl border bg-card p-5 text-card-foreground backdrop:bg-black/50"
-			>
-				<div className="flex flex-col gap-5">
-					<h2 id={titleId} className="text-lg font-semibold">
-						{t.title}
-					</h2>
-					{hasConsent && (
-						<a
-							href={consentAddress(formId, version)}
-							target="_blank"
-							rel="noopener"
-							className="inline-flex min-h-11 items-center font-medium underline underline-offset-4"
-						>
-							{t.consentCopy}
-						</a>
-					)}
-					<section className="flex flex-col gap-2">
-						<h3 className="font-medium">{t.forgetTitle}</h3>
-						<p className="text-sm text-muted-foreground">{t.forgetBody}</p>
-						<Button variant="outline" className="self-start" onClick={forget}>
-							{t.forget}
-						</Button>
-					</section>
-					<section className="flex flex-col gap-2">
-						<h3 className="font-medium">{t.withdrawTitle}</h3>
-						<p className="text-sm text-muted-foreground">{t.withdrawBody}</p>
-						{asking ? (
-							<div className="flex flex-wrap items-center gap-2">
-								<p className="w-full font-medium">{t.withdrawSure}</p>
-								<Button
-									className="bg-destructive text-white hover:bg-destructive/90"
-									disabled={busy}
-									onClick={() => void withdraw()}
-								>
-									{t.withdrawConfirm}
-								</Button>
-								<Button variant="outline" onClick={() => setAsking(false)}>
-									{strings.owner.cancel}
-								</Button>
-							</div>
-						) : (
-							<Button variant="outline" className="self-start" onClick={() => setAsking(true)}>
-								{t.withdraw}
-							</Button>
-						)}
-						{failed && (
-							<p role="alert" className="font-medium text-destructive">
-								{t.withdrawFailed}
-							</p>
-						)}
-					</section>
-					<Button variant="outline" className="self-start" onClick={() => dialog.current?.close()}>
-						{t.close}
+		<dialog
+			ref={dialog}
+			aria-labelledby={titleId}
+			onClose={onClose}
+			className="m-auto w-[min(30rem,calc(100vw-2rem))] rounded-xl border bg-card p-5 text-card-foreground backdrop:bg-black/50"
+		>
+			<div className="flex flex-col gap-5">
+				<h2 id={titleId} className="text-lg font-semibold">
+					{t.title}
+				</h2>
+				{hasConsent && (
+					<a
+						href={consentAddress(formId, version)}
+						target="_blank"
+						rel="noopener"
+						className="inline-flex min-h-11 items-center font-medium underline underline-offset-4"
+					>
+						{t.consentCopy}
+					</a>
+				)}
+				<section className="flex flex-col gap-2">
+					<h3 className="font-medium">{t.forgetTitle}</h3>
+					<p className="text-sm text-muted-foreground">{t.forgetBody}</p>
+					<Button variant="outline" className="self-start" onClick={forget}>
+						{t.forget}
 					</Button>
-				</div>
-			</dialog>
-		</>
+				</section>
+				<section className="flex flex-col gap-2">
+					<h3 className="font-medium">{t.withdrawTitle}</h3>
+					<p className="text-sm text-muted-foreground">{t.withdrawBody}</p>
+					{asking ? (
+						<div className="flex flex-wrap items-center gap-2">
+							<p className="w-full font-medium">{t.withdrawSure}</p>
+							<Button
+								className="bg-destructive text-white hover:bg-destructive/90"
+								disabled={busy}
+								onClick={() => void withdraw()}
+							>
+								{t.withdrawConfirm}
+							</Button>
+							<Button variant="outline" onClick={() => setAsking(false)}>
+								{strings.owner.cancel}
+							</Button>
+						</div>
+					) : (
+						<Button variant="outline" className="self-start" onClick={() => setAsking(true)}>
+							{t.withdraw}
+						</Button>
+					)}
+					{failed && (
+						<p role="alert" className="font-medium text-destructive">
+							{t.withdrawFailed}
+						</p>
+					)}
+				</section>
+				<Button variant="outline" className="self-start" onClick={() => dialog.current?.close()}>
+					{t.close}
+				</Button>
+			</div>
+		</dialog>
 	);
 }

@@ -322,8 +322,10 @@ describe("the example forms", () => {
 	it("can be added to an account, once", async () => {
 		const first = await signUp(forms);
 		const added = await call(first, "POST", "examples");
-		expect(await added.json()).toEqual({ added: 2 });
+		// Every example in examples/: two surveys of items and a short feedback form.
+		expect(await added.json()).toEqual({ added: 3 });
 		expect(await formRow("home-baking")).toMatchObject({ state: "open" });
+		expect(await formRow("windowsill-herbs")).toMatchObject({ state: "open" });
 		expect(await (await call(first, "POST", "examples")).json()).toEqual({ added: 0 });
 		const second = await signUp(forms);
 		expect(await (await call(second, "POST", "examples")).json()).toEqual({ added: 0 });
@@ -344,10 +346,10 @@ describe("an example that was answered while it was nobody's", () => {
 			expect(begun.status).toBe(201);
 			const cookie = await signUp(fresh);
 			const added = await fresh.fetch("/api/owner/examples", as(cookie, { method: "POST" }));
-			// The other example, which nobody answered, is added; this one is not.
-			expect(await added.json()).toEqual({ added: 1 });
+			// The examples nobody answered are added; this one is not.
+			expect(await added.json()).toEqual({ added: 2 });
 			const row = await fresh.db.prepare("SELECT id FROM form ORDER BY id").all();
-			expect(row.results).toEqual([{ id: "home-baking" }]);
+			expect(row.results).toEqual([{ id: "home-baking" }, { id: "windowsill-herbs" }]);
 			const results = await fresh.fetch("/forms/quick-feedback/responses", as(cookie));
 			expect(results.status).toBe(404);
 			const file = await fresh.fetch(
