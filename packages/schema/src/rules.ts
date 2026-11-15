@@ -33,7 +33,7 @@ export type Condition =
 const reference = z.string().min(1);
 const comparable = z.union([z.string(), z.number()]);
 
-export const conditionSchema: z.ZodType<Condition> = z.lazy(() =>
+export const conditionSchema: z.ZodType<Condition, Condition> = z.lazy(() =>
 	z.union([
 		z.strictObject({ question: reference, row: reference.optional(), is: comparable }),
 		z.strictObject({ question: reference, row: reference.optional(), isNot: comparable }),

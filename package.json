@@ -13,6 +13,7 @@
 		"wrangler": "pnpm --filter @gateweave/forms-web exec wrangler --cwd ../..",
 		"typecheck": "pnpm -r typecheck",
 		"test": "pnpm -r test",
+		"import:tally": "pnpm --filter @gateweave/forms-tally-import run import",
 		"check": "biome check",
 		"format": "biome check --write",
 		"verify": "pnpm check && pnpm typecheck && pnpm test && pnpm build"

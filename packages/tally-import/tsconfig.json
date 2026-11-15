@@ -1,0 +1,8 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		// Only the command line (src/cli.ts) and the tests touch Node; the importer itself is pure.
+		"types": ["node"]
+	},
+	"include": ["src", "test"]
+}

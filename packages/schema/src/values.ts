@@ -43,7 +43,7 @@ export interface FieldsValue {
  * was checked against its question when it was saved (`answerValueSchema`); this only keeps a
  * stored or received response from being something else entirely.
  */
-export const anyAnswerValueSchema: z.ZodType<AnswerValue> = z.union([
+export const anyAnswerValueSchema: z.ZodType<AnswerValue, AnswerValue> = z.union([
 	z.string(),
 	z.number(),
 	z.strictObject({ option: z.string(), text: z.string().optional() }),
