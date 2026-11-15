@@ -36,7 +36,12 @@ export const strings = {
 		busy: "Many people are starting this form right now. Wait a minute and press Start again.",
 		resumeTitle: "You started this form on this device",
 		resume: "Continue where you stopped",
-		startOver: "Or start again from the beginning below.",
+		startOver:
+			"Your answers so far are kept. You can continue, or start again with a new response.",
+		/** The way to start when there is a response to continue: the quieter of the two. */
+		again: "Start again",
+		/** On a form with no consent text of its own, so the first page says something true. */
+		saved: "Your answers are saved as you give them, so you can stop and continue later.",
 	},
 	position: {
 		/** Sections are legs of the way. People are told which one they are on, never a percentage. */
