@@ -4,11 +4,17 @@ import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { RequestFailed, startResponse } from "#/lib/client";
 import { cn } from "#/lib/cn";
 import { deviceClass } from "#/lib/device";
-import { rememberedResponse, rememberResponse, type SavedResponse } from "#/lib/local";
+import {
+	forgetResponse,
+	rememberedResponse,
+	rememberResponse,
+	type SavedResponse,
+} from "#/lib/local";
 import { strings } from "#/lib/strings";
 import { Button } from "./button";
 import { MadeWith } from "./card-frame";
 import { RichTextView } from "./rich-text";
+import { consentAddress } from "./your-answers";
 
 /**
  * A form's first page: its title, and its consent when it has one. Nothing is stored and no
@@ -98,6 +104,17 @@ export function StartPage({
 								{!closed && (
 									<p className="text-sm text-muted-foreground">{strings.start.startOver}</p>
 								)}
+								<Button
+									variant="outline"
+									className="mt-2 self-start bg-card"
+									onClick={() => {
+										forgetResponse(definition.id);
+										setSaved(undefined);
+									}}
+								>
+									{strings.start.forget}
+								</Button>
+								<p className="text-sm text-muted-foreground">{strings.start.forgetNote}</p>
 							</section>
 						)}
 						{closed ? (
@@ -108,6 +125,14 @@ export function StartPage({
 							<>
 								{consent.title && <h2 className="text-xl font-semibold">{consent.title}</h2>}
 								<RichTextView text={consent.text} />
+								<a
+									href={consentAddress(definition.id)}
+									target="_blank"
+									rel="noopener"
+									className="inline-flex min-h-11 items-center self-start text-sm text-muted-foreground underline underline-offset-4"
+								>
+									{strings.start.consentCopy}
+								</a>
 								<label className="flex min-h-12 cursor-pointer items-start gap-3 rounded-lg border border-input bg-card px-4 py-3 has-checked:border-foreground has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-ring">
 									{/* Its state stays in the box itself, so a tick made before the script ran counts. */}
 									<input

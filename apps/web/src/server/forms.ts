@@ -5,7 +5,7 @@ import {
 	formatProblems,
 	parseDefinition,
 } from "@gateweave/forms-schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { createDb, type Database } from "./db";
 import { definition as definitions, form as forms } from "./db/schema";
 
@@ -68,6 +68,23 @@ export function readStored(hash: string, json: string): Definition {
 	const parsed = definitionSchema.parse(JSON.parse(json));
 	read.set(hash, parsed);
 	return parsed;
+}
+
+/**
+ * The wording a form had under this hash, or nothing when it never had it. A response keeps the
+ * definition it began under, so a copy of the consent someone gave has to come from that one.
+ */
+export async function findVersion(
+	id: string,
+	hash: string,
+	db: Database = createDb(env.DB),
+): Promise<Definition | undefined> {
+	const row = await db
+		.select({ json: definitions.json })
+		.from(definitions)
+		.where(and(eq(definitions.hash, hash), eq(definitions.formId, id)))
+		.get();
+	return row ? readStored(hash, row.json) : undefined;
 }
 
 /**

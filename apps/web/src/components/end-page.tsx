@@ -11,6 +11,7 @@ import { strings } from "#/lib/strings";
 import { Button } from "./button";
 import { QuestionInput } from "./inputs";
 import { RichTextView } from "./rich-text";
+import { consentAddress } from "./your-answers";
 
 /**
  * What a person sees once their response is complete: the form's thanks, and the questions
@@ -24,12 +25,15 @@ export function EndPage({
 	definition,
 	askDetached,
 	children,
+	version,
 }: {
 	definition: Definition;
 	/** Whether the person finished just now, in this page. */
 	askDetached: boolean;
 	/** What follows the thanks and the detached questions: the person's own answers to look over. */
 	children?: ReactNode;
+	/** Names the wording the response began under, for the copy of its consent. */
+	version: string;
 }) {
 	const heading = useRef<HTMLHeadingElement>(null);
 	useEffect(() => {
@@ -53,6 +57,16 @@ export function EndPage({
 			)}
 			{hasDetached && <DetachedForm definition={definition} />}
 			{children}
+			{definition.consent && (
+				<a
+					href={consentAddress(definition.id, version)}
+					target="_blank"
+					rel="noopener"
+					className="inline-flex min-h-11 items-center self-start text-sm text-muted-foreground underline underline-offset-4"
+				>
+					{strings.yours.consentCopy}
+				</a>
+			)}
 		</main>
 	);
 }

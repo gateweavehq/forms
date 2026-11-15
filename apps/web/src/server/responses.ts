@@ -318,6 +318,24 @@ export async function completeResponse(
 	]);
 }
 
+/**
+ * Deletes a response that is not complete, with its answers: the person takes back what they
+ * gave. A completed one is the study's from then on, and only whoever runs the form removes it.
+ */
+export async function withdrawResponse(db: Database, row: ResponseRow): Promise<void> {
+	const refusal = new Refusal(
+		409,
+		"This response is complete, so it cannot be withdrawn here. Ask whoever sent you the form to delete it.",
+	);
+	if (row.completedAt !== null) throw refusal;
+	// "Still open" is asked again by the statement itself: a request that completes the response
+	// can arrive between the check above and this. The answers go with their response.
+	const removed = await db
+		.delete(response)
+		.where(and(eq(response.id, row.id), isNull(response.completedAt)));
+	if (removed.meta.changes === 0) throw refusal;
+}
+
 /** A random key for a row whose order of arrival must not be stored. Fits a JavaScript number. */
 function randomRowId(): number {
 	const [high = 0, low = 0] = crypto.getRandomValues(new Uint32Array(2));

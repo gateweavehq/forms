@@ -13,6 +13,7 @@ import {
 	readAnswers,
 	saveDetached,
 	saveProgress,
+	withdrawResponse,
 } from "./responses";
 
 /** The most bytes a respondent's request may have. A long text answer is a few kilobytes. */
@@ -152,11 +153,25 @@ export function getResponse(request: Request, id: string): Promise<Response> {
 			answers: await readAnswers(db, row.id),
 			position: row.position,
 			completed: row.completedAt !== null,
+			// Names the wording the response began under, for a copy of the consent it gave.
+			version: row.definitionHash,
 			// The form was edited since this response began. The response goes on under the
 			// definition it started with, which the page does not have, so it is sent along.
 			formChanged,
 			definition: formChanged ? await definitionOf(db, row) : null,
 		});
+	});
+}
+
+/**
+ * `DELETE /api/responses/:id`: withdraws a response that is not complete, and deletes its
+ * answers. The secret is the only thing that can do this, as it is the only thing that can read.
+ */
+export function deleteResponse(request: Request, id: string): Promise<Response> {
+	return answering(async () => {
+		const row = await responseOf(request, id);
+		await withdrawResponse(createDb(env.DB), row);
+		return json({ withdrawn: true });
 	});
 }
 

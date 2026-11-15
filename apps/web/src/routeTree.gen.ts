@@ -20,6 +20,7 @@ import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiOwnerSplatRouteImport } from './routes/api/owner/$'
 import { Route as ApiResponsesResponseRouteImport } from './routes/api/responses/$response'
 import { Route as FFormIndexRouteImport } from './routes/f/$form/index'
+import { Route as FFormConsentRouteImport } from './routes/f/$form/consent'
 import { Route as FormsFormIndexRouteImport } from './routes/forms/$form/index'
 import { Route as FormsFormDetachedRouteImport } from './routes/forms/$form/detached'
 import { Route as FormsFormItemsRouteImport } from './routes/forms/$form/items'
@@ -86,6 +87,11 @@ const ApiResponsesResponseRoute = ApiResponsesResponseRouteImport.update({
 const FFormIndexRoute = FFormIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => FFormRoute,
+} as any)
+const FFormConsentRoute = FFormConsentRouteImport.update({
+  id: '/consent',
+  path: '/consent',
   getParentRoute: () => FFormRoute,
 } as any)
 const FormsFormIndexRoute = FormsFormIndexRouteImport.update({
@@ -163,6 +169,7 @@ export interface FileRoutesByFullPath {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/owner/$': typeof ApiOwnerSplatRoute
   '/api/responses/$response': typeof ApiResponsesResponseRouteWithChildren
+  '/f/$form/consent': typeof FFormConsentRoute
   '/forms/$form/detached': typeof FormsFormDetachedRoute
   '/forms/$form/items': typeof FormsFormItemsRoute
   '/forms/$form/questions': typeof FormsFormQuestionsRoute
@@ -186,6 +193,7 @@ export interface FileRoutesByTo {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/owner/$': typeof ApiOwnerSplatRoute
   '/api/responses/$response': typeof ApiResponsesResponseRouteWithChildren
+  '/f/$form/consent': typeof FFormConsentRoute
   '/forms/$form/detached': typeof FormsFormDetachedRoute
   '/forms/$form/items': typeof FormsFormItemsRoute
   '/forms/$form/questions': typeof FormsFormQuestionsRoute
@@ -212,6 +220,7 @@ export interface FileRoutesById {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/owner/$': typeof ApiOwnerSplatRoute
   '/api/responses/$response': typeof ApiResponsesResponseRouteWithChildren
+  '/f/$form/consent': typeof FFormConsentRoute
   '/forms/$form/detached': typeof FormsFormDetachedRoute
   '/forms/$form/items': typeof FormsFormItemsRoute
   '/forms/$form/questions': typeof FormsFormQuestionsRoute
@@ -239,6 +248,7 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/owner/$'
     | '/api/responses/$response'
+    | '/f/$form/consent'
     | '/forms/$form/detached'
     | '/forms/$form/items'
     | '/forms/$form/questions'
@@ -262,6 +272,7 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/owner/$'
     | '/api/responses/$response'
+    | '/f/$form/consent'
     | '/forms/$form/detached'
     | '/forms/$form/items'
     | '/forms/$form/questions'
@@ -287,6 +298,7 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/owner/$'
     | '/api/responses/$response'
+    | '/f/$form/consent'
     | '/forms/$form/detached'
     | '/forms/$form/items'
     | '/forms/$form/questions'
@@ -396,6 +408,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FFormIndexRouteImport
       parentRoute: typeof FFormRoute
     }
+    '/f/$form/consent': {
+      id: '/f/$form/consent'
+      path: '/consent'
+      fullPath: '/f/$form/consent'
+      preLoaderRoute: typeof FFormConsentRouteImport
+      parentRoute: typeof FFormRoute
+    }
     '/forms/$form/': {
       id: '/forms/$form/'
       path: '/'
@@ -484,11 +503,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface FFormRouteChildren {
+  FFormConsentRoute: typeof FFormConsentRoute
   FFormIndexRoute: typeof FFormIndexRoute
   FFormRResponseRoute: typeof FFormRResponseRoute
 }
 
 const FFormRouteChildren: FFormRouteChildren = {
+  FFormConsentRoute: FFormConsentRoute,
   FFormIndexRoute: FFormIndexRoute,
   FFormRResponseRoute: FFormRResponseRoute,
 }

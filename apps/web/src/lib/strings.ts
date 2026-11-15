@@ -269,6 +269,38 @@ export const strings = {
 		again: "Start again",
 		/** On a form with no consent text of its own, so the first page says something true. */
 		saved: "Your answers are saved as you give them, so you can stop and continue later.",
+		forget: "Forget it on this device",
+		forgetNote:
+			"Forgetting removes the way back from this browser. The answers stay saved, and only their full address opens them.",
+		consentCopy: "Open this text on its own, to print or keep",
+	},
+	yours: {
+		open: "Your answers and this device",
+		title: "Your answers and this device",
+		consentCopy: "Open the consent text, to print or keep",
+		forgetTitle: "Forget on this device",
+		forgetBody:
+			"This browser remembers the way back to your answers, so that the form's link can offer them again. Forgetting removes that. Your answers stay saved, and from then on only their full address opens them.",
+		forget: "Forget on this device",
+		withdrawTitle: "Withdraw",
+		withdrawBody:
+			"Deletes everything you have answered so far, for good. You can do this until you finish the form.",
+		withdraw: "Delete my answers",
+		withdrawSure: "This cannot be undone.",
+		withdrawConfirm: "Yes, delete them",
+		withdrawFailed: "Your answers could not be deleted. Check your connection and try again.",
+		close: "Close",
+		withdrawnTitle: "Your answers were deleted",
+		withdrawnBody: "Nothing you answered is stored any more. You can close this page.",
+	},
+	consentCopy: {
+		heading: "Consent text",
+		of: (form: string) => `Of the form "${form}"`,
+		statement: "The statement you agreed to:",
+		print: "Print or save as PDF",
+		back: "Back to the form",
+		noneTitle: "This form has no consent text",
+		noneBody: "It starts without one, so there is nothing to keep a copy of.",
 	},
 	position: {
 		/** Sections are legs of the way. People are told which one they are on, never a percentage. */

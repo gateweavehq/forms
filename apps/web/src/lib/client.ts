@@ -16,6 +16,8 @@ const responseSchema = z.object({
 	answers: responseAnswersSchema,
 	position: z.string().nullable(),
 	completed: z.boolean(),
+	/** Names the wording the response began under. */
+	version: z.string(),
 	formChanged: z.boolean(),
 	/** The definition the response started under, when the form has changed since. */
 	definition: definitionSchema.nullable(),
@@ -88,6 +90,14 @@ export async function sendProgress(id: string, secret: string, progress: Progres
 
 export async function completeResponse(id: string, secret: string): Promise<void> {
 	await post(`/api/responses/${encodeURIComponent(id)}/complete`, {}, secret);
+}
+
+/** Withdraws a response that is not complete: the server deletes it and its answers. */
+export async function withdrawResponse(id: string, secret: string): Promise<void> {
+	await send(`/api/responses/${encodeURIComponent(id)}`, {
+		method: "DELETE",
+		headers: { Authorization: `Bearer ${secret}` },
+	});
 }
 
 /** Sends the answers a form keeps apart. Nothing in the request names the response. */
