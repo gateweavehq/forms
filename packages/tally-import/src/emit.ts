@@ -26,6 +26,9 @@ export interface RepeatDraft {
 
 export type Draft = QuestionsDraft | RepeatDraft;
 
+/** Something in the source that the definition cannot hold, found while writing it out. */
+export class ImportProblem extends Error {}
+
 /** The ids a question and its parts were given. */
 interface Named {
 	id: string;
@@ -78,7 +81,12 @@ export class Emitter {
 			return { any: condition.parts.map((part) => this.#condition(part)) };
 		if (condition.op === "not") return { not: this.#condition(condition.part) };
 		const named = this.#named.get(condition.question);
-		if (!named) throw new Error("A rule points at a question that was not imported");
+		if (!named) {
+			const what = condition.question.title ? ` ("${condition.question.title}")` : "";
+			throw new ImportProblem(
+				`A rule depends on the answer to something that did not become a question${what}: the consent tick, a tick that only reveals text, or a hidden question that nothing shows. A definition's rule can only look at a question.`,
+			);
+		}
 		const question = named.id;
 		if (condition.op === "answered") return { question, answered: condition.answered };
 		if (condition.op === "includes") {

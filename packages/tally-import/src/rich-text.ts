@@ -23,11 +23,13 @@ const ENTITIES: Record<string, string> = {
 export function decodeEntities(text: string): string {
 	return text
 		.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (whole, name: string) => {
-			if (name.startsWith("#x") || name.startsWith("#X")) {
-				return String.fromCodePoint(Number.parseInt(name.slice(2), 16));
-			}
-			if (name.startsWith("#")) return String.fromCodePoint(Number.parseInt(name.slice(1), 10));
-			return ENTITIES[name.toLowerCase()] ?? whole;
+			if (!name.startsWith("#")) return ENTITIES[name.toLowerCase()] ?? whole;
+			const hex = name.startsWith("#x") || name.startsWith("#X");
+			const code = Number.parseInt(name.slice(hex ? 2 : 1), hex ? 16 : 10);
+			// A number that is no character ("&#99999999;") stays as it was written: one bad
+			// entity in one block must not stop the whole form from being read.
+			const isCharacter = code >= 0 && code <= 0x10ffff && !(code >= 0xd800 && code <= 0xdfff);
+			return isCharacter ? String.fromCodePoint(code) : whole;
 		})
 		.replace(/ /g, " ");
 }

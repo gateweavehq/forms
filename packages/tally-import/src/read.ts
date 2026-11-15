@@ -1,6 +1,6 @@
 import type { Paragraph, QuestionType, RichText } from "@gateweave/forms-schema";
 import { decodeEntities, oneLine, richText } from "./rich-text";
-import { flagOf, numberOf, type TallyBlock, type TallyForm, textOf } from "./tally";
+import { flagOf, isSet, numberOf, type TallyBlock, type TallyForm, textOf } from "./tally";
 
 export interface RawOption {
 	/** The uuid a rule names this option by. */
@@ -106,6 +106,8 @@ export interface RawForm {
 	notes: string[];
 	/** What stops the import: something the definition cannot hold. */
 	problems: string[];
+	/** The payload keys the importer does not read and that are set to something, by block type. */
+	unread: Map<string, Set<string>>;
 }
 
 interface Title extends Shown {
@@ -137,6 +139,37 @@ const INPUTS: Record<string, QuestionType> = {
 };
 
 const HEADINGS: Record<string, 1 | 2 | 3> = { HEADING_1: 1, HEADING_2: 2, HEADING_3: 3 };
+
+/** The keys of a block's payload that the importer reads, on some type of block or other. */
+const READ_KEYS = new Set([
+	"safeHTMLSchema",
+	"text",
+	"title",
+	"name",
+	"placeholder",
+	"isHidden",
+	"isRequired",
+	"isOtherOption",
+	"allowMultiple",
+	"hasMaxChoices",
+	"maxChoices",
+	"hasMinNumber",
+	"minNumber",
+	"hasMaxNumber",
+	"maxNumber",
+	"randomize",
+	"isThankYouPage",
+	"logicalOperator",
+	"conditionals",
+	"actions",
+	"hiddenFields",
+	// Where a block stands among its siblings, which the order of the list already says.
+	"index",
+	"isFirst",
+	"isLast",
+	// Set on every option of a group that has an "Other" option; `isOtherOption` marks the one.
+	"hasOtherOption",
+]);
 
 /** Counts things of one kind so that a note says "40 rules …" once, not forty times. */
 class Counts {
@@ -261,6 +294,11 @@ function readPieces(form: TallyForm, raw: RawForm, notes: Counts): Piece[][] {
 		const page = pages.length;
 		const shown = { hidden: flagOf(block.payload, "isHidden"), shownBy: [] };
 		index++;
+		for (const [key, value] of Object.entries(block.payload)) {
+			if (READ_KEYS.has(key) || !isSet(value)) continue;
+			const keys = raw.unread.get(block.type) ?? new Set<string>();
+			raw.unread.set(block.type, keys.add(key));
+		}
 
 		if (block.type === "PAGE_BREAK") {
 			pages.push([]);
@@ -325,7 +363,7 @@ function isPlainLabel(piece: Piece): piece is RawText {
  * one title into one question: Tally has no question with several fields, so its authors write a
  * title, then a line of text and an input for each field.
  */
-function attach(pieces: Piece[]): Array<RawElement | RuleBlock> {
+function attach(pieces: Piece[], notes: Counts): Array<RawElement | RuleBlock> {
 	const out: Array<RawElement | RuleBlock> = [];
 	let title: Title | undefined;
 	let between: RawText[] = [];
@@ -362,7 +400,9 @@ function attach(pieces: Piece[]): Array<RawElement | RuleBlock> {
 			out.push(piece);
 			title = undefined;
 			between = [];
-		} else if (!joinFields(out, piece)) {
+		} else if (joinFields(out, piece)) {
+			notes.add("joined field");
+		} else {
 			if (piece.lone) {
 				piece.title = piece.options[0]?.label ?? "";
 			} else {
@@ -507,6 +547,7 @@ function readRules(pages: Array<Array<RawElement | RuleBlock>>, raw: RawForm, no
 		const conditionals = Array.isArray(payload.conditionals) ? payload.conditionals : [];
 		const actions = Array.isArray(payload.actions) ? payload.actions : [];
 		const parts: RawCondition[] = [];
+		if (conditionals.length === 0) notes.add("rule without a condition");
 		let readable = conditionals.length > 0;
 		for (const conditional of conditionals) {
 			const condition = readCondition(conditional, fields);
@@ -616,6 +657,10 @@ const NOTES: Record<string, (count: number) => string> = {
 		`${plural(count, "question shuffles", "questions shuffle")} its options in Tally. The options are imported in their written order.`,
 	"one-row grid": (count) =>
 		`${plural(count, "grid", "grids")} with a single row became ${count === 1 ? "a single choice" : "single choices"}. The row's own label was dropped.`,
+	"joined field": (count) =>
+		`${plural(count, "text input", "text inputs")} with no title of ${count === 1 ? "its" : "their"} own ${count === 1 ? "was" : "were"} joined to the question above as further fields, labelled by the line of text above each.`,
+	"rule without a condition": (count) =>
+		`${plural(count, "rule has", "rules have")} no condition, so nothing says when ${count === 1 ? "it applies" : "they apply"}. ${count === 1 ? "It was" : "They were"} left out.`,
 	"dangling target": (count) =>
 		`${plural(count, "rule shows", "rules show")} a block that is no longer in the form. That part of the rule was left out.`,
 	disclosure: (count) =>
@@ -638,9 +683,10 @@ export function readForm(form: TallyForm): RawForm {
 		rules: 0,
 		notes: [],
 		problems: [],
+		unread: new Map(),
 	};
 	const notes = new Counts();
-	const attached = readPieces(form, raw, notes).map(attach);
+	const attached = readPieces(form, raw, notes).map((pieces) => attach(pieces, notes));
 	readRules(attached, raw, notes);
 	const elements = attached.map((pieces) =>
 		pieces.filter((piece): piece is RawElement => piece.kind !== "rule"),
@@ -653,6 +699,21 @@ export function readForm(form: TallyForm): RawForm {
 	for (const [key, count] of notes.entries()) {
 		const note = NOTES[key];
 		if (note) raw.notes.push(note(count));
+	}
+	// Named, not counted: whether "hasBadge" matters is for the person importing to judge.
+	if (raw.unread.size > 0) {
+		const list = [...raw.unread]
+			.map(([type, keys]) => `${type}: ${[...keys].sort().join(", ")}`)
+			.sort();
+		raw.notes.push(`Settings of blocks that are set and were not read: ${list.join("; ")}.`);
+	}
+	const settings = Object.keys(form.settings)
+		.filter((key) => isSet(form.settings[key]))
+		.sort();
+	if (settings.length > 0) {
+		raw.notes.push(
+			`The form's own settings are not imported (its language, look, closing, progress bar and the like): ${settings.join(", ")}.`,
+		);
 	}
 	return raw;
 }

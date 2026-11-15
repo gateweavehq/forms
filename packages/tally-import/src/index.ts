@@ -6,7 +6,7 @@ import {
 	parseDefinition,
 	referencedQuestions,
 } from "@gateweave/forms-schema";
-import { type Draft, Emitter, type QuestionsDraft } from "./emit";
+import { type Draft, Emitter, ImportProblem, type QuestionsDraft } from "./emit";
 import {
 	type CopiesPage,
 	type Difference,
@@ -258,10 +258,16 @@ export function importTally(input: unknown, options: ImportOptions = {}): Import
 	const emitter = new Emitter();
 	emitter.name(drafts);
 	const sections = new Map<Draft, string>();
-	for (const draft of drafts) {
-		const section = emitter.section(draft);
-		sections.set(draft, section.id);
-		definition.sections.push(section);
+	try {
+		for (const draft of drafts) {
+			const section = emitter.section(draft);
+			sections.set(draft, section.id);
+			definition.sections.push(section);
+		}
+	} catch (error) {
+		// An import answers with problems. It does not throw at whoever called it.
+		if (error instanceof ImportProblem) return { ok: false, problems: [error.message] };
+		throw error;
 	}
 	for (const note of emitter.notes) notes.add(note);
 	if (options.detachEmail) detachEmail(definition);

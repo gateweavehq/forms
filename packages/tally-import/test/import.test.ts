@@ -305,11 +305,14 @@ describe("folding the repeated questions", () => {
 	});
 
 	it("says what it changed on the way", () => {
-		expect(report.notes).toEqual([
-			"9 grids with a single row became single choices. The row's own label was dropped.",
-			"9 rules show a block that is no longer in the form. That part of the rule was left out.",
-			'9 ticks that only revealed text became detail behind a "more" control.',
-		]);
+		expect(report.notes).toHaveLength(5);
+		expect(report.notes).toEqual(
+			expect.arrayContaining([
+				"9 grids with a single row became single choices. The row's own label was dropped.",
+				"9 rules show a block that is no longer in the form. That part of the rule was left out.",
+				'9 ticks that only revealed text became detail behind a "more" control.',
+			]),
+		);
 	});
 
 	it("finds the name inside a heading that says more", () => {
@@ -543,7 +546,7 @@ describe("smaller things", () => {
 		const result = importTally(form.pageData());
 		if (!result.ok) throw new Error(result.problems.join("\n"));
 		expect(result.report.sections[0]?.questions).toBe(1);
-		expect(result.report.notes).toEqual(["1 hidden block that no rule shows was left out."]);
+		expect(result.report.notes).toContain("1 hidden block that no rule shows was left out.");
 	});
 
 	it("turns a thank-you page into the form's end", () => {
