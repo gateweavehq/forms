@@ -27,7 +27,8 @@ export const strings = {
 		noAccount: "No account yet?",
 		haveAccount: "Already have an account?",
 		closedNote: "This server takes new accounts from a list. Use the address that is on it.",
-		closed: "This server takes new accounts from a list, and this address is not on it.",
+		closed:
+			"This server takes new accounts from a list, and this address cannot make one. If it already has an account, sign in.",
 		tooMany: "Too many tries with this address. Wait a minute and try again.",
 		wrong: "The email or the password is not right.",
 		exists: "There is already an account with this address. Sign in instead.",

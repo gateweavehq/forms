@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { getRequestHeaders } from "@tanstack/react-start/server";
-import { mayMakeAccount } from "../../lib/sign-up-allow";
+import { mayMakeAccount, parseAllowList } from "../../lib/sign-up-allow";
 import { createDb } from "../db";
 import { createAuth } from "./config";
 
@@ -20,6 +20,14 @@ export function getAuth() {
 }
 
 function buildAuth() {
+	const list = parseAllowList(env.SIGN_UP_ALLOW);
+	if (list.ignored.length > 0) {
+		// Said once, when the isolate first needs to know who is signed in: an operator who
+		// listed a domain would otherwise believe that its people can sign up.
+		console.warn(
+			`SIGN_UP_ALLOW: ignored ${list.ignored.join(", ")}. Only whole addresses are taken until addresses can be verified.`,
+		);
+	}
 	return createAuth({
 		db,
 		secret: env.BETTER_AUTH_SECRET,
@@ -27,6 +35,7 @@ function buildAuth() {
 		// A deployed Worker answers over HTTPS. Local dev has no certificate.
 		secureCookies: !baseURL && !import.meta.env.DEV,
 		mayMakeAccount: (email) => mayMakeAccount(env.SIGN_UP_ALLOW, email),
+		signUpClosed: list.closed,
 		allowTry: async (key) => (await env.AUTH_LIMIT.limit({ key })).success,
 	});
 }

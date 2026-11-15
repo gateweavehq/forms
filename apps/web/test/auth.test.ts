@@ -123,25 +123,47 @@ describe("tries at an account", () => {
 });
 
 describe("a server that takes new accounts from a list", () => {
-	it("makes accounts for the listed addresses and domains, and for nobody else", async () => {
+	it("makes accounts for the listed addresses, and for nobody else", async () => {
 		const closed = await startForms({
 			settings: { SIGN_UP_ALLOW: "ada@example.test, @study.example" },
 		});
 		try {
 			const make = (email: string) => authPost(closed, "/sign-up/email", { ...newPerson(), email });
 			expect((await make("ada@example.test")).status).toBe(200);
-			expect((await make("anyone@study.example")).status).toBe(200);
 			const refused = await make("bob@example.test");
 			expect(refused.status).toBe(403);
 			expect(await refused.json()).toMatchObject({ code: "SIGN_UP_CLOSED" });
+			// A listed domain admits nobody: without email, anyone could type an address there.
+			expect((await make("anyone@study.example")).status).toBe(403);
 			const { results } = await closed.db.prepare("SELECT email FROM user").all();
-			expect((results as Array<{ email: string }>).map((row) => row.email).sort()).toEqual([
+			expect((results as Array<{ email: string }>).map((row) => row.email)).toEqual([
 				"ada@example.test",
-				"anyone@study.example",
 			]);
 			expect(await (await closed.fetch("/login")).text()).toContain(
-				"takes new accounts from a list",
+				"This server takes new accounts from a list.",
 			);
+			// The operator is told, once, that the domain entry was not taken.
+			const told = closed.logs.filter(({ message }) => message.includes("SIGN_UP_ALLOW"));
+			expect(told).toHaveLength(1);
+			expect(told[0]?.message).toContain("@study.example");
+		} finally {
+			await closed.dispose();
+		}
+	});
+
+	it("answers an address that is not listed and one that is listed and taken alike", async () => {
+		const closed = await startForms({ settings: { SIGN_UP_ALLOW: "ada@example.test" } });
+		try {
+			const make = (email: string) => authPost(closed, "/sign-up/email", { ...newPerson(), email });
+			expect((await make("ada@example.test")).status).toBe(200);
+			const taken = await make("ada@example.test");
+			const unlisted = await make("bob@example.test");
+			expect(taken.status).toBe(403);
+			expect(cookiesOf(taken)).toBe("");
+			expect(unlisted.status).toBe(taken.status);
+			expect(await unlisted.text()).toBe(await taken.text());
+			// In another case too.
+			expect((await make("ADA@example.test")).status).toBe(403);
 		} finally {
 			await closed.dispose();
 		}

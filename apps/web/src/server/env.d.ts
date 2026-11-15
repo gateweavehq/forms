@@ -5,8 +5,8 @@ declare namespace Cloudflare {
 		/** Public URL of the app. Inferred from the request when unset. */
 		BETTER_AUTH_URL?: string;
 		/**
-		 * Who may make an account: addresses and `@domains`, separated by commas. Anyone when
-		 * unset. See src/lib/sign-up-allow.ts.
+		 * Who may make an account: whole addresses, separated by commas. Anyone when unset. An
+		 * entry that names a domain is ignored. See src/lib/sign-up-allow.ts.
 		 */
 		SIGN_UP_ALLOW?: string;
 		/**

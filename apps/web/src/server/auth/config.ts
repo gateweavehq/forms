@@ -2,6 +2,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { betterAuth } from "better-auth/minimal";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
+import { eq } from "drizzle-orm";
 import type { Database } from "../db";
 import { schema } from "../db";
 
@@ -16,6 +17,8 @@ export interface AuthConfig {
 	secureCookies?: boolean | undefined;
 	/** Whether this address may make an account (the `SIGN_UP_ALLOW` setting). Anyone without it. */
 	mayMakeAccount?: ((email: string) => boolean) | undefined;
+	/** Whether accounts are made from a list at all. */
+	signUpClosed?: boolean | undefined;
 	/**
 	 * Whether one more try at signing in or signing up with this address is within the limit.
 	 * Unlimited without it.
@@ -24,7 +27,7 @@ export interface AuthConfig {
 }
 
 export const SIGN_UP_CLOSED =
-	"This server takes new accounts from a list, and this address is not on it.";
+	"This server takes new accounts from a list, and this address cannot make one. If it already has an account, sign in.";
 export const TOO_MANY_TRIES = "Too many tries with this address. Wait a minute and try again.";
 
 /**
@@ -91,6 +94,19 @@ export function createAuth(config: AuthConfig) {
 					!config.mayMakeAccount(address)
 				) {
 					throw APIError.from("FORBIDDEN", { message: SIGN_UP_CLOSED, code: "SIGN_UP_CLOSED" });
+				}
+				// On a closed server, a listed address that already has an account gets the answer
+				// an unlisted one gets, word for word and before anything is counted. Otherwise
+				// the two answers together would say which addresses are on the list.
+				if (ctx.path === "/sign-up/email" && config.signUpClosed) {
+					const taken = await config.db
+						.select({ id: schema.user.id })
+						.from(schema.user)
+						.where(eq(schema.user.email, address))
+						.get();
+					if (taken) {
+						throw APIError.from("FORBIDDEN", { message: SIGN_UP_CLOSED, code: "SIGN_UP_CLOSED" });
+					}
 				}
 				// Counted per address tried, not per sender: guessing at one account's password
 				// is what this stops. A sender trying many addresses is for the edge to stop.
