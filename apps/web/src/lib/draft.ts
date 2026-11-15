@@ -8,6 +8,7 @@ import {
 	isRanking,
 	MAX_LONG_TEXT,
 	MAX_SHORT_TEXT,
+	missingFrom,
 	type Question,
 } from "@gateweave/forms-schema";
 import { strings } from "./strings";
@@ -77,10 +78,20 @@ function specified(question: Question, chosen: string[], texts: Record<string, s
  */
 export function fromDraft(question: Question, draft: Draft): Checked {
 	const checked = read(question, draft);
-	if (checked.ok && checked.value === null && question.required) {
-		return problem(strings.problem.required);
+	if (!checked.ok) return checked;
+	const missing = missingFrom(question, checked.value);
+	if (!missing) return checked;
+	// Said by name: "this question needs an answer" does not tell which of three rows is empty.
+	const named = (ids: string[], among: Array<{ id: string; label: string }>) =>
+		among.filter((entry) => ids.includes(entry.id)).map((entry) => entry.label);
+	if (missing.kind === "rows" && question.type === "grid") {
+		return problem(strings.problem.rows(named(missing.rows, question.rows)));
 	}
-	return checked;
+	if (missing.kind === "fields" && question.type === "fields") {
+		return problem(strings.problem.fields(named(missing.fields, question.fields)));
+	}
+	if (missing.kind === "ranking") return problem(strings.problem.ranking(missing.of));
+	return problem(strings.problem.required);
 }
 
 function read(question: Question, draft: Draft): Checked {

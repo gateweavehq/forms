@@ -33,6 +33,9 @@ question { id, type, label, description?, detail?, required?, showIf?, detached?
   `any` and `not`. Inside a block, a rule reads the same item's answers. A question that is not
   shown counts as unanswered for the rules after it, so changing an answer closes what hung on
   the old one.
+- **`required` means all of a question**: every row of a grid, a ranking of every option, every
+  field of a `fields` question. A single field can be marked required by itself, which makes the
+  question one that needs an answer without asking for its other fields (`missingFrom`).
 - **A `detached` question** is asked after the response is complete and stored without anything
   that names it. Rules may not cross that line in either direction.
 - **Ids are unique across the form** (questions, items, groups), because answers are stored under

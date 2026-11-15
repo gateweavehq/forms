@@ -119,6 +119,45 @@ describe("completing a response whose answers were changed on the way", () => {
 		expect(done.answers.questions.often).toMatchObject({ value: null, activeMs: 500 });
 	});
 
+	it("is refused while a required grid, ranking or field is only partly answered", async () => {
+		const started = await start();
+		// This response's own definition, with three of its questions made required.
+		const row = await forms.db
+			.prepare(
+				"SELECT d.json FROM response r JOIN definition d ON d.hash = r.definition_hash WHERE r.id = ?",
+			)
+			.bind(started.id)
+			.first<{ json: string }>();
+		const strict = JSON.parse(row?.json ?? "{}");
+		for (const question of strict.sections[0].questions) {
+			if (question.id === "tools" || question.id === "priorities") question.required = true;
+			if (question.id === "flours") question.fields[1].required = true;
+		}
+		await forms.db.batch([
+			forms.db
+				.prepare("INSERT INTO definition (hash, form_id, json) VALUES (?, ?, ?)")
+				.bind("strict", "home-baking", JSON.stringify(strict)),
+			forms.db
+				.prepare("UPDATE response SET definition_hash = ? WHERE id = ?")
+				.bind("strict", started.id),
+		]);
+
+		// One row of three, one field that is not the required one, two options of four.
+		await save(started, "tools", { rows: { scale: "always" } });
+		await save(started, "flours", { fields: { wheat: "Strong white" } });
+		await save(started, "priorities", { order: ["crust", "crumb"] });
+		const partly = await complete(started);
+		expect(partly.status).toBe(422);
+		expect(await partly.json()).toMatchObject({
+			missing: ["q:tools", "q:flours", "q:priorities"],
+		});
+
+		await save(started, "tools", { rows: { scale: "always", thermometer: "never", pot: "never" } });
+		await save(started, "flours", { fields: { rye: "Wholemeal" } });
+		await save(started, "priorities", { order: ["crust", "crumb", "flavour", "keeping"] });
+		expect((await complete(started)).status).toBe(200);
+	});
+
 	it("happens once: a second request to complete does not move the time", async () => {
 		const started = await start();
 		const [first, second] = await Promise.all([complete(started), complete(started)]);

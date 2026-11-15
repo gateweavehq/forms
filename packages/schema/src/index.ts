@@ -52,6 +52,7 @@ export {
 	type QuestionPlace,
 	questionsInOrder,
 } from "./places";
+export { type Missing, missingFrom, needsAnswer } from "./required";
 export {
 	type Condition,
 	conditionSchema,

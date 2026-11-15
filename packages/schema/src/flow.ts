@@ -1,6 +1,7 @@
 import type { ResponseAnswers } from "./answers";
 import type { Definition, Question } from "./definition";
 import { detachedQuestions, placesOf } from "./places";
+import { missingFrom } from "./required";
 import { holds } from "./rules";
 import { type AnswerValue, isAnswered } from "./values";
 
@@ -182,8 +183,8 @@ export function flow(definition: Definition, answers: ResponseAnswers): Step[] {
 }
 
 /**
- * The asking steps whose question is required and has no answer. A response can be completed
- * when this is empty.
+ * The asking steps whose question needs an answer and does not have a whole one (`missingFrom`
+ * says what a whole one is). A response can be completed when this is empty.
  */
 export function unansweredRequired(definition: Definition, answers: ResponseAnswers): AskingStep[] {
 	const places = placesOf(definition);
@@ -191,13 +192,13 @@ export function unansweredRequired(definition: Definition, answers: ResponseAnsw
 		.filter(isAsking)
 		.filter((step) => {
 			const question = places.questions.get(step.questionId)?.question;
-			if (!question?.required) return false;
+			if (!question) return false;
 			const item = itemOf(step);
 			const answer =
 				item === undefined
 					? answers.questions[step.questionId]
 					: answers.items[item]?.[step.questionId];
-			return !isAnswered(answer?.value);
+			return missingFrom(question, answer?.value) !== undefined;
 		});
 }
 

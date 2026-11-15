@@ -83,6 +83,10 @@ export const strings = {
 	},
 	problem: {
 		required: "This question needs an answer.",
+		rows: (labels: string[]) =>
+			`This question needs an answer for each line. Still open: ${labels.join(", ")}.`,
+		fields: (labels: string[]) => `Please fill in: ${labels.join(", ")}.`,
+		ranking: (count: number) => `Please put all ${count} in order.`,
 		number: "Enter a number, or leave it empty.",
 		integer: "Enter a whole number.",
 		min: (min: number) => `Enter ${min} or more.`,

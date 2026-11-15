@@ -181,6 +181,7 @@ export class Emitter {
 						id: named.fields[index] ?? "",
 						label: wording(field.label) || `Field ${index + 1}`,
 						...(field.placeholder ? { placeholder: field.placeholder } : {}),
+						...(field.required ? { required: true } : {}),
 					})),
 				};
 		}

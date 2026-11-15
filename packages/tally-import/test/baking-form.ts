@@ -231,7 +231,8 @@ export function bakingForm(slips: Slips = {}): unknown {
 	form.text("Wheat (for example, strong white)");
 	form.input("INPUT_TEXT", "Wheat");
 	form.text("Rye");
-	form.input("INPUT_TEXT", "Rye");
+	// Tally marks each input required by itself. Only this one is.
+	form.input("INPUT_TEXT", "Rye", { required: true });
 	form.text("Anything else");
 	form.input("INPUT_TEXT");
 	form.title("K06: How often do you use each of these?");

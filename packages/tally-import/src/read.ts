@@ -18,6 +18,8 @@ export interface RawField {
 	ref: string;
 	label: string;
 	placeholder: string;
+	/** Tally marks each input required by itself, so each field keeps its own. */
+	required: boolean;
 }
 
 /**
@@ -399,8 +401,12 @@ function joinFields(out: Array<RawElement | RuleBlock>, input: RawQuestion): boo
 				ref: before.refs[0] as string,
 				label: oneLine(before.description) || before.placeholder || "1",
 				placeholder: before.placeholder,
+				required: before.required,
 			},
 		];
+		// What was required was that one input. The question as a whole is not: marking it so
+		// would make every field required, the ones Tally left optional too.
+		before.required = false;
 		before.description = [];
 		before.placeholder = "";
 	}
@@ -408,8 +414,8 @@ function joinFields(out: Array<RawElement | RuleBlock>, input: RawQuestion): boo
 		ref: input.refs[0] as string,
 		label: labels.map((text) => oneLine(text.text)).join(" "),
 		placeholder: input.placeholder,
+		required: input.required,
 	});
-	before.required ||= input.required;
 	out.length = at + 1;
 	return true;
 }

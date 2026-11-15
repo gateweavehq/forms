@@ -165,6 +165,62 @@ describe("what the inputs hold, as an answer", () => {
 		});
 	});
 
+	it("asks for all of a required grid, ranking or set of fields, and says what is still open", () => {
+		const grid: Question = {
+			id: "tools",
+			type: "grid",
+			label: "How often?",
+			required: true,
+			rows: [
+				{ id: "scale", label: "Kitchen scale" },
+				{ id: "pot", label: "Cast-iron pot" },
+			],
+			columns: [
+				{ id: "never", label: "Never" },
+				{ id: "always", label: "Always" },
+			],
+		};
+		expect(fromDraft(grid, draft({ rows: { scale: "always" } }))).toEqual({
+			ok: false,
+			problem: "This question needs an answer for each line. Still open: Cast-iron pot.",
+		});
+		expect(fromDraft(grid, draft({ rows: { scale: "always", pot: "never" } })).ok).toBe(true);
+
+		const ranking: Question = {
+			id: "rank",
+			type: "ranking",
+			label: "Order these",
+			required: true,
+			options: [
+				{ id: "crust", label: "Crust" },
+				{ id: "crumb", label: "Crumb" },
+				{ id: "taste", label: "Taste" },
+			],
+		};
+		expect(fromDraft(ranking, draft({ options: ["crumb"] }))).toEqual({
+			ok: false,
+			problem: "Please put all 3 in order.",
+		});
+
+		const fields: Question = {
+			id: "flours",
+			type: "fields",
+			label: "Flours",
+			fields: [
+				{ id: "wheat", label: "Wheat" },
+				{ id: "rye", label: "Rye", required: true },
+			],
+		};
+		expect(fromDraft(fields, draft({ rows: { wheat: "Strong white" } }))).toEqual({
+			ok: false,
+			problem: "Please fill in: Rye.",
+		});
+		expect(fromDraft(fields, draft({ rows: { rye: "Dark" } }))).toEqual({
+			ok: true,
+			value: { fields: { rye: "Dark" } },
+		});
+	});
+
 	it("knows when there is nothing to store, required or not", () => {
 		expect(isEmptyDraft({ ...choice, required: true }, empty)).toBe(true);
 		expect(isEmptyDraft(choice, draft({ option: "yes" }))).toBe(false);

@@ -29,7 +29,13 @@ export const optionSchema = z.strictObject({
 
 const rowSchema = z.strictObject({ id: idSchema, label });
 const columnSchema = z.strictObject({ id: idSchema, label });
-const fieldSchema = z.strictObject({ id: idSchema, label, placeholder: z.string().optional() });
+const fieldSchema = z.strictObject({
+	id: idSchema,
+	label,
+	placeholder: z.string().optional(),
+	/** This field has to be filled, whether or not the question as a whole is required. */
+	required: z.boolean().optional(),
+});
 
 const questionBase = {
 	id: idSchema,
@@ -39,7 +45,10 @@ const questionBase = {
 	description: richTextSchema.optional(),
 	/** Shown under the question behind a "more" control. */
 	detail: richTextSchema.optional(),
-	/** A question can be passed without an answer unless this is set. */
+	/**
+	 * A question can be passed without an answer unless this is set. Set, it means all of the
+	 * question: every row of a grid, every field, a ranking of every option.
+	 */
 	required: z.boolean().optional(),
 	showIf: conditionSchema.optional(),
 	/**

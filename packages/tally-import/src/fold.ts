@@ -248,6 +248,9 @@ function settings(copy: Copy): Map<string, string> {
 		question.options.forEach((option, n) => {
 			found.set(`${at}, option ${n + 1}, asks for text`, option.specify ? "yes" : "no");
 		});
+		question.fields.forEach((field, n) => {
+			found.set(`${at}, field ${n + 1}, required`, field.required ? "yes" : "no");
+		});
 	});
 	return found;
 }
@@ -347,6 +350,7 @@ function applyShape(
 		question.fields.forEach((field, n) => {
 			field.label = text(`${at}, field ${n + 1}`);
 			field.placeholder = text(`${at}, field ${n + 1}, placeholder`);
+			field.required = setting.get(`${at}, field ${n + 1}, required`) === "yes";
 		});
 		const max = limit("most choices");
 		const numberMin = limit("smallest number");

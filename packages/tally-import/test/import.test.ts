@@ -147,10 +147,12 @@ describe("importing a Tally form", () => {
 					label: "Wheat (for example, strong white)",
 					placeholder: "Wheat",
 				},
-				{ id: "rye", label: "Rye", placeholder: "Rye" },
+				// Required as Tally had it: this field, not the question and not its neighbours.
+				{ id: "rye", label: "Rye", placeholder: "Rye", required: true },
 				{ id: "anything-else", label: "Anything else" },
 			],
 		});
+		expect(question(definition, "k05").required).toBeUndefined();
 	});
 
 	it("keeps a rule as it is: the question it reads and the option it waits for", () => {

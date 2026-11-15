@@ -7,6 +7,7 @@ import {
 	type Item,
 	mergeCount,
 	mergeItem,
+	needsAnswer,
 	type Question,
 	type Section,
 	type SectionStep,
@@ -343,7 +344,7 @@ export function AskingCard({
 	const now = fromDraft(question, draft);
 	const forward = isLast(now.ok ? now.value : undefined)
 		? strings.nav.finish
-		: isEmptyDraft(question, draft) && !question.required
+		: isEmptyDraft(question, draft) && !needsAnswer(question)
 			? strings.nav.skip
 			: strings.nav.next;
 
