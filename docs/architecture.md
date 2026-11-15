@@ -131,11 +131,18 @@ things stand in the way of a flood, and a third is planned:
 
 ### Storage (D1)
 
-- `response`: id, form id, a hash of the definition it was started on, a seal of the secret, the
-  device class, the position, and when it was created, updated and completed.
+- `definition`: each definition a response was started under, as JSON, under a hash of its
+  content. A form that has not changed adds no row.
+- `response`: id, form id, the hash of its definition, the version of the answers' shape, a seal
+  of the secret, the device class, the position, and when it was created, updated and completed.
 - `answer`: one row per response, question and item, with the value as JSON, the active time and
   the number of changes. The server counts a change in the statement that writes the answer.
 - `detached_answer`: a random key, the form id and the answers. Nothing else.
+
+A response is checked against the definition it started under, for as long as it is open, and
+the page asks that definition's questions: when the form has changed since, `GET
+/api/responses/<id>` sends the stored definition along. Answers only mean something against the
+questions they were given to, so the results side will read them against the same row.
 
 ### What is stored about a person, and what is not
 

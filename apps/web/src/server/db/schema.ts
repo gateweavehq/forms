@@ -1,6 +1,24 @@
 import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 /**
+ * A form's definition as it was when someone started a response on it, under a hash of its
+ * content. A form changes: questions are reworded, options added, ids removed. Answers only
+ * mean something against the definition they were given to, so each one in use is kept, once,
+ * and a response is checked against its own for as long as it is open.
+ */
+export const definition = sqliteTable(
+	"definition",
+	{
+		/** SHA-256 of the definition's JSON, in hex. */
+		hash: text("hash").primaryKey(),
+		formId: text("form_id").notNull(),
+		/** The definition, as JSON. */
+		json: text("json").notNull(),
+	},
+	(table) => [index("definition_form_idx").on(table.formId)],
+);
+
+/**
  * One person's pass through one form. It exists from the moment they agree to take part, so
  * that every answer has somewhere to go as it is given.
  *
@@ -14,8 +32,12 @@ export const response = sqliteTable(
 		/** Random, and in the response's address. */
 		id: text("id").primaryKey(),
 		formId: text("form_id").notNull(),
-		/** Which wording the answers were given to: a hash of the definition at the start. */
-		definitionHash: text("definition_hash").notNull(),
+		/** The definition the answers are given to: the one the form had at the start. */
+		definitionHash: text("definition_hash")
+			.notNull()
+			.references(() => definition.hash),
+		/** The version of the answers' shape (`ANSWERS_VERSION`) this response's rows are in. */
+		answersVersion: integer("answers_version").notNull(),
 		/**
 		 * What proves the secret without being it (see `server/secret.ts`). The secret itself is
 		 * only in the person's address bar.

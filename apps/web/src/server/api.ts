@@ -6,6 +6,7 @@ import { findForm } from "./forms";
 import {
 	completeResponse,
 	createResponse,
+	definitionOf,
 	findResponse,
 	Refusal,
 	type ResponseRow,
@@ -140,14 +141,18 @@ export function startResponse(request: Request, formId: string): Promise<Respons
 export function getResponse(request: Request, id: string): Promise<Response> {
 	return answering(async () => {
 		const row = await responseOf(request, id);
+		const db = createDb(env.DB);
 		const form = await findForm(row.formId);
+		const formChanged = form?.hash !== row.definitionHash;
 		return json({
 			form: row.formId,
-			answers: await readAnswers(createDb(env.DB), row.id),
+			answers: await readAnswers(db, row.id),
 			position: row.position,
 			completed: row.completedAt !== null,
-			// The form was edited since this response began: its answers were given to other words.
-			formChanged: form?.hash !== row.definitionHash,
+			// The form was edited since this response began. The response goes on under the
+			// definition it started with, which the page does not have, so it is sent along.
+			formChanged,
+			definition: formChanged ? await definitionOf(db, row) : null,
 		});
 	});
 }
@@ -161,7 +166,8 @@ export function postProgress(request: Request, id: string): Promise<Response> {
 			const { activeMs } = body.answer;
 			body.answer.activeMs = Math.min(Math.max(Math.round(activeMs), 0), MAX_ACTIVE_MS);
 		}
-		await saveProgress(createDb(env.DB), await formOf(row.formId), row, body);
+		const db = createDb(env.DB);
+		await saveProgress(db, await definitionOf(db, row), row, body);
 		return json({ saved: true });
 	});
 }
@@ -170,7 +176,8 @@ export function postProgress(request: Request, id: string): Promise<Response> {
 export function postComplete(request: Request, id: string): Promise<Response> {
 	return answering(async () => {
 		const row = await responseOf(request, id);
-		await completeResponse(createDb(env.DB), await formOf(row.formId), row);
+		const db = createDb(env.DB);
+		await completeResponse(db, await definitionOf(db, row), row);
 		return json({ completed: true });
 	});
 }

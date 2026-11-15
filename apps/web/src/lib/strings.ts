@@ -116,7 +116,7 @@ export const strings = {
 			"The link may have been cut short, or it belongs to a response that no longer exists.",
 		startAgain: "Start the form from the beginning",
 		formChanged:
-			"This form was changed after you started it. Your answers are kept; some questions may read differently now.",
+			"This form was changed after you started it. You are answering it as it was when you began, and your answers are kept.",
 	},
 	end: {
 		title: "Thank you",

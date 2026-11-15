@@ -128,7 +128,9 @@ export function Runner({ definition, responseId }: { definition: Definition; res
 		case "open":
 			return (
 				<Answering
-					definition={definition}
+					// A response goes on under the definition it started with, whatever the form
+					// says today: its answers were given to those questions.
+					definition={opened.response.definition ?? definition}
 					responseId={responseId}
 					secret={opened.secret}
 					initial={opened.response}

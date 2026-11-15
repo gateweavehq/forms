@@ -84,6 +84,7 @@ describe("starting a response", () => {
 		const [row] = (await rows("response")).filter(({ id }) => id === started.id);
 		expect(row).toMatchObject({ form_id: "home-baking", device: "tablet", completed_at: null });
 		expect(Object.keys(row ?? {}).sort()).toEqual([
+			"answers_version",
 			"completed_at",
 			"created_at",
 			"definition_hash",

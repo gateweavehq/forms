@@ -84,6 +84,9 @@ silently.
     db:generate` and commit them. Never edit one that has been merged.
 11. **Every string the app shows is in `apps/web/src/lib/strings.ts`.** A form's own wording
     comes from its definition.
+12. **A response belongs to the definition it started under.** That definition is stored
+    (`definition` table) and is what the response is checked against and read with, whatever the
+    form says today. Never validate or interpret a response against the current form.
 
 ## Code style
 
@@ -94,7 +97,8 @@ silently.
   framework requires them.
 - Comments explain why, not what. Match the tone and density of the file you are editing.
 - Generated files are not edited by hand: `routeTree.gen.ts`, `worker-configuration.d.ts` and
-  everything under `apps/web/migrations/`.
+  everything under `apps/web/migrations/`, except a migration whose generated statements cannot
+  run (`0001_definitions.sql` says why at its top). Keep the snapshot Drizzle Kit wrote.
 - Dependencies are pinned to exact versions. Shared ones go in the `catalog:` of
   `pnpm-workspace.yaml`. `drizzle-orm` stays on 0.45, as in the sibling repositories: the 1.0
   migration format does not work with Wrangler's D1 migrations.

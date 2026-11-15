@@ -1,4 +1,4 @@
-import { type AnswerValue, responseAnswersSchema } from "@gateweave/forms-schema";
+import { type AnswerValue, definitionSchema, responseAnswersSchema } from "@gateweave/forms-schema";
 import { z } from "zod";
 import type { DeviceClass } from "./device";
 
@@ -17,6 +17,8 @@ const responseSchema = z.object({
 	position: z.string().nullable(),
 	completed: z.boolean(),
 	formChanged: z.boolean(),
+	/** The definition the response started under, when the form has changed since. */
+	definition: definitionSchema.nullable(),
 });
 
 export type Started = z.infer<typeof startedSchema>;

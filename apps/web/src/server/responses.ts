@@ -1,7 +1,9 @@
 import {
+	ANSWERS_VERSION,
 	type AnswerValue,
 	answerValueSchema,
 	type Definition,
+	definitionSchema,
 	detachedQuestions,
 	detachedQuestionsShown,
 	emptyAnswers,
@@ -15,7 +17,7 @@ import {
 } from "@gateweave/forms-schema";
 import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "./db";
-import { answer, detachedAnswer, response } from "./db/schema";
+import { answer, definition as definitions, detachedAnswer, response } from "./db/schema";
 import type { Form } from "./forms";
 import { randomToken, sealSecret, secretMatches } from "./secret";
 
@@ -56,16 +58,47 @@ export async function createResponse(
 	const id = randomToken(12);
 	const secret = randomToken(32);
 	const now = Date.now();
-	await db.insert(response).values({
-		id,
-		formId: form.definition.id,
-		definitionHash: form.hash,
-		secretSeal: await sealSecret(id, secret),
-		device,
-		createdAt: now,
-		updatedAt: now,
-	});
+	const formId = form.definition.id;
+	await db.batch([
+		// Kept once per content. A form that has not changed adds nothing here.
+		db
+			.insert(definitions)
+			.values({ hash: form.hash, formId, json: JSON.stringify(form.definition) })
+			.onConflictDoNothing(),
+		db.insert(response).values({
+			id,
+			formId,
+			definitionHash: form.hash,
+			answersVersion: ANSWERS_VERSION,
+			secretSeal: await sealSecret(id, secret),
+			device,
+			createdAt: now,
+			updatedAt: now,
+		}),
+	]);
 	return { id, secret };
+}
+
+/** Definitions already read, by hash. A hash names one content for good, so this never goes stale. */
+const stored = new Map<string, Definition>();
+
+/**
+ * The definition a response was started under. Its answers are checked against this one, not
+ * against the form as it is today: an option the person chose must not become invalid because
+ * the form's author renamed it since.
+ */
+export async function definitionOf(db: Database, row: ResponseRow): Promise<Definition> {
+	const known = stored.get(row.definitionHash);
+	if (known) return known;
+	const found = await db
+		.select({ json: definitions.json })
+		.from(definitions)
+		.where(eq(definitions.hash, row.definitionHash))
+		.get();
+	if (!found) throw new Error("A response's definition is missing");
+	const read = definitionSchema.parse(JSON.parse(found.json));
+	stored.set(row.definitionHash, read);
+	return read;
 }
 
 /**
@@ -166,7 +199,7 @@ const POSITION = /^[sqif]:[a-z0-9_:-]{1,140}$/;
  */
 export async function saveProgress(
 	db: Database,
-	form: Form,
+	definition: Definition,
 	row: ResponseRow,
 	progress: { answer?: IncomingAnswer | undefined; position?: string | undefined },
 ): Promise<void> {
@@ -186,7 +219,7 @@ export async function saveProgress(
 		await touch;
 		return;
 	}
-	const checked = checkAnswer(form.definition, progress.answer);
+	const checked = checkAnswer(definition, progress.answer);
 	const upsert = db
 		.insert(answer)
 		.values({
@@ -213,9 +246,13 @@ export async function saveProgress(
  * Marks a response complete. It is refused while a required question that is shown has no
  * answer, and names those steps. Completing twice changes nothing.
  */
-export async function completeResponse(db: Database, form: Form, row: ResponseRow): Promise<void> {
+export async function completeResponse(
+	db: Database,
+	definition: Definition,
+	row: ResponseRow,
+): Promise<void> {
 	if (row.completedAt !== null) return;
-	const missing = unansweredRequired(form.definition, await readAnswers(db, row.id));
+	const missing = unansweredRequired(definition, await readAnswers(db, row.id));
 	if (missing.length > 0) {
 		throw new Refusal(422, "Some questions that need an answer have none.", {
 			missing: missing.map((step) => step.key),
