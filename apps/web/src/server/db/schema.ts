@@ -71,7 +71,12 @@ export const answer = sqliteTable(
 		changes: integer("changes").notNull().default(0),
 		updatedAt: integer("updated_at").notNull(),
 	},
-	(table) => [primaryKey({ columns: [table.responseId, table.questionId, table.itemId] })],
+	(table) => [
+		primaryKey({ columns: [table.responseId, table.questionId, table.itemId] }),
+		// The primary key finds one response's answers. Results are read the other way: every
+		// response's answer to one question, for one item.
+		index("answer_question_idx").on(table.questionId, table.itemId),
+	],
 );
 
 /**

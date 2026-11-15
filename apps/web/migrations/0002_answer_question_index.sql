@@ -1,0 +1,1 @@
+CREATE INDEX `answer_question_idx` ON `answer` (`question_id`,`item_id`);

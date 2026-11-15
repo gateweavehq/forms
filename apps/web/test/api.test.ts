@@ -397,3 +397,16 @@ describe("what leaves the Worker", () => {
 		expect(logged).not.toContain("weekly");
 	});
 });
+
+describe("reading answers the way results will", () => {
+	it("finds every response's answer to one question for one item through an index", async () => {
+		const { results } = await forms.db
+			.prepare("EXPLAIN QUERY PLAN SELECT value FROM answer WHERE question_id = ? AND item_id = ?")
+			.bind("made", "rye-bread")
+			.all();
+		const plan = JSON.stringify(results);
+		// Not a walk through every answer of every response.
+		expect(plan).toContain("answer_question_idx");
+		expect(plan).not.toContain("SCAN");
+	});
+});
