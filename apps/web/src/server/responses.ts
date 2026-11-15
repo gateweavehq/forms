@@ -19,10 +19,11 @@ import {
 	withdrawalOf,
 } from "@gateweave/forms-schema";
 import { and, eq, isNull } from "drizzle-orm";
-import type { Database } from "./db";
+import { type Database, runBatch } from "./db";
 import { answer, definition as definitions, detachedAnswer, response } from "./db/schema";
 import type { Form } from "./forms";
 import { randomToken, sealSecret, secretMatches } from "./secret";
+import { keepApartStatement, startStatements, withdrawStatements } from "./statements";
 
 export type Device = "phone" | "tablet" | "desk";
 
@@ -85,24 +86,20 @@ export async function createResponse(
 	// "Still open" is asked again by the statements themselves. The form was read a moment ago,
 	// and its owner can close or delete it in between: a response written after its form was
 	// deleted would lie under an id nobody owns, where no one could find or delete it.
-	const d1 = db.$client;
-	const open = "EXISTS (SELECT 1 FROM form WHERE id = ?2 AND state = 'open')";
-	const [, started] = await d1.batch([
-		d1
-			.prepare(
-				`INSERT INTO definition (hash, form_id, json) SELECT ?1, ?2, ?3 WHERE ${open}
-				ON CONFLICT (hash) DO NOTHING`,
-			)
-			.bind(form.hash, formId, json),
-		d1
-			.prepare(
-				`INSERT INTO response
-					(id, form_id, definition_hash, answers_version, secret_seal, device, created_at, updated_at)
-				SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7 WHERE ${open}`,
-			)
-			.bind(id, formId, form.hash, ANSWERS_VERSION, seal, device, now),
-	]);
-	if (!started?.meta.changes) throw new Refusal(404, "There is no such form.");
+	const changed = await runBatch(
+		db.$client,
+		startStatements({
+			id,
+			formId,
+			hash: form.hash,
+			json,
+			answersVersion: ANSWERS_VERSION,
+			seal,
+			device,
+			now,
+		}),
+	);
+	if (!changed.at(-1)) throw new Refusal(404, "There is no such form.");
 	return { id, secret };
 }
 
@@ -402,26 +399,16 @@ export async function withdrawResponse(
 	const afterCompletion = mayWithdraw(definition, form, true);
 	// Everything read above was read a moment ago. A request that completes the response, or
 	// one that closes the form, can arrive in between, so each statement asks again, and all of
-	// them ask the same thing: they change something together or not at all. "No form that is
-	// not open", because an example served from its file has no row and is open.
-	const allowed = `(completed_at IS NULL OR (?2 = 1 AND NOT EXISTS (
-		SELECT 1 FROM form WHERE form.id = response.form_id AND form.state <> 'open')))`;
-	const still = `EXISTS (SELECT 1 FROM response WHERE id = ?1 AND ${allowed})`;
-	const d1 = db.$client;
-	const [, , removed] = await d1.batch([
-		d1
-			.prepare(`UPDATE definition SET withdrawn = withdrawn + 1 WHERE hash = ?3 AND ${still}`)
-			.bind(row.id, afterCompletion ? 1 : 0, row.definitionHash),
-		// Said, not left to the table's ON DELETE: what a person takes back must not depend on
-		// a database setting being on.
-		d1
-			.prepare(`DELETE FROM answer WHERE response_id = ?1 AND ${still}`)
-			.bind(row.id, afterCompletion ? 1 : 0),
-		d1
-			.prepare(`DELETE FROM response WHERE id = ?1 AND ${allowed}`)
-			.bind(row.id, afterCompletion ? 1 : 0),
-	]);
-	if (removed?.meta.changes) return "withdrawn";
+	// them ask the same thing: they change something together or not at all.
+	const changed = await runBatch(
+		db.$client,
+		withdrawStatements({
+			responseId: row.id,
+			definitionHash: row.definitionHash,
+			afterCompletion,
+		}),
+	);
+	if (changed.at(-1)) return "withdrawn";
 	return withdrawalOf(definition) === "until-complete" ? "complete" : "closed";
 }
 
@@ -468,12 +455,6 @@ export async function saveDetached(
 	}
 	// Only while the form is open, asked by the statement: one closed or deleted since it was
 	// read takes no more rows. A row under a deleted form's id would be nobody's to delete.
-	const stored = await db.$client
-		.prepare(
-			`INSERT INTO detached_answer (id, form_id, answers) SELECT ?1, ?2, ?3
-			WHERE EXISTS (SELECT 1 FROM form WHERE id = ?2 AND state = 'open')`,
-		)
-		.bind(row.id, row.formId, row.answers)
-		.run();
-	if (!stored.meta.changes) throw new Refusal(404, "There is no such form.");
+	const [stored] = await runBatch(db.$client, [keepApartStatement(row)]);
+	if (!stored) throw new Refusal(404, "There is no such form.");
 }

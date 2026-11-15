@@ -27,8 +27,11 @@ export function ConfirmButton({
 	children: ReactNode;
 	confirmLabel: string;
 	onConfirm: (typed: string) => Promise<void>;
-	/** What has to be typed first, and the line that asks for it. */
-	typed?: { label: string; expected: string };
+	/**
+	 * What has to be typed first, and the line that asks for it: with `expected`, exactly that;
+	 * with `password`, anything, hidden as it is typed, for the server to check.
+	 */
+	typed?: { label: string; expected: string } | { label: string; password: true };
 	variant?: "outline" | "ghost";
 }) {
 	const dialog = useRef<HTMLDialogElement>(null);
@@ -36,13 +39,19 @@ export function ConfirmButton({
 	const [busy, setBusy] = useState(false);
 	const [failure, setFailure] = useState<string>();
 	const [text, setText] = useState("");
-	const matches = !typed || text.trim().toLowerCase() === typed.expected.trim().toLowerCase();
+	const secret = typed !== undefined && "password" in typed;
+	const matches =
+		!typed ||
+		("password" in typed
+			? text.length > 0
+			: text.trim().toLowerCase() === typed.expected.trim().toLowerCase());
 
 	const confirm = async () => {
 		setBusy(true);
 		setFailure(undefined);
 		try {
-			await onConfirm(text.trim());
+			// A password is handed on as typed: a space can be part of one.
+			await onConfirm(secret ? text : text.trim());
 			dialog.current?.close();
 		} catch (error) {
 			setFailure(refusalText(error).message);
@@ -77,8 +86,8 @@ export function ConfirmButton({
 						<label className="flex flex-col gap-1.5 text-sm font-medium break-words">
 							{typed.label}
 							<input
-								type="text"
-								autoComplete="off"
+								type={secret ? "password" : "text"}
+								autoComplete={secret ? "current-password" : "off"}
 								autoCapitalize="off"
 								spellCheck={false}
 								className="min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base font-normal"

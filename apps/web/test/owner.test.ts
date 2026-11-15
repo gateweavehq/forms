@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { bakingForm } from "../../../packages/tally-import/test/baking-form";
+import { replaceDefinitionStatements, type Statement } from "../src/server/statements";
 import { as, signUp } from "./accounts";
 import { type Forms, startForms } from "./forms-worker";
 import { plantForm } from "./made-up";
@@ -434,6 +435,90 @@ describe("a new definition", () => {
 		});
 		expect(response.status).toBe(400);
 		expect(await formRow("another-id")).toBeNull();
+	});
+});
+
+describe("a new definition that arrives after the form has changed", () => {
+	// The other request first, which two real requests cannot be made to do on purpose: the
+	// statements are built as the server builds them from the form it read, and run afterwards.
+	async function run(statements: Statement[]): Promise<number[]> {
+		const results = await forms.db.batch(
+			statements.map(({ sql, params }) => forms.db.prepare(sql).bind(...params)),
+		);
+		return results.map((result: { meta: { changes?: number } }) => result.meta.changes ?? 0);
+	}
+
+	async function replaceOf(id: string, title: string, hasController: boolean) {
+		const row = (await formRow(id)) as { owner_id: string };
+		return replaceDefinitionStatements({
+			formId: id,
+			ownerId: row.owner_id,
+			hash: `hash-of-${title}`,
+			json: JSON.stringify(plantForm(id, title)),
+			title,
+			hasController,
+			now: 1,
+		});
+	}
+
+	const versions = async (id: string) =>
+		(
+			await forms.db
+				.prepare("SELECT count(*) AS n FROM definition WHERE form_id = ?")
+				.bind(id)
+				.first<{ n: number }>()
+		)?.n ?? -1;
+
+	it("leaves nothing under the id of a form that was deleted in between", async () => {
+		const { cookie, id } = await ownerWithForm();
+		const statements = await replaceOf(id, "Written too late", true);
+		expect((await call(cookie, "DELETE", `forms/${id}`, { confirm: id })).status).toBe(200);
+
+		expect(await run(statements)).toEqual([0, 0]);
+		expect(await versions(id)).toBe(0);
+		expect(await formRow(id)).toBeNull();
+
+		// And nothing for the account that uses the id next to be shown as a version of theirs.
+		expect((await call(cookie, "POST", "forms", { definition: plantForm(id) })).status).toBe(201);
+		const settings = await (await forms.fetch(`/forms/${id}/settings`, as(cookie))).text();
+		expect(new Set(settings.match(/Version [0-9a-f]{8}/g)).size).toBe(1);
+		expect(settings).not.toContain("Written too late");
+	});
+
+	it("leaves no version behind when a form was opened in between and the definition names nobody", async () => {
+		const { cookie, id } = await ownerWithForm("draft");
+		const before = await formRow(id);
+		// Decided while the form was a draft, which may be given a definition without a controller.
+		const statements = await replaceOf(id, "Names nobody", false);
+		expect((await call(cookie, "POST", `forms/${id}/state`, { state: "open" })).status).toBe(200);
+
+		expect(await run(statements)).toEqual([0, 0]);
+		expect(await versions(id)).toBe(1);
+		expect(await formRow(id)).toMatchObject({
+			title: "Plants at home",
+			definition_hash: (before as { definition_hash: string }).definition_hash,
+		});
+
+		// The same statements for a definition that names someone go through on an open form.
+		expect(await run(await replaceOf(id, "Names someone", true))).toEqual([1, 1]);
+		expect(await versions(id)).toBe(2);
+		expect(await formRow(id)).toMatchObject({ title: "Names someone" });
+	});
+
+	it("changes nothing for a form that is another account's by now", async () => {
+		const { id } = await ownerWithForm();
+		const statements = replaceDefinitionStatements({
+			formId: id,
+			ownerId: "an-account-that-had-the-id-before",
+			hash: "hash-of-someone-elses",
+			json: JSON.stringify(plantForm(id, "Someone else's")),
+			title: "Someone else's",
+			hasController: true,
+			now: 1,
+		});
+		expect(await run(statements)).toEqual([0, 0]);
+		expect(await versions(id)).toBe(1);
+		expect(await formRow(id)).toMatchObject({ title: "Plants at home" });
 	});
 });
 

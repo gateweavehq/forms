@@ -107,6 +107,7 @@ function AccountPage() {
 			<section className="flex flex-col gap-3 border-t pt-6">
 				<h2 className="text-lg font-semibold">{strings.account.deleteTitle}</h2>
 				<p className="text-sm text-muted-foreground">{strings.account.deleteLead}</p>
+				<p className="text-sm text-muted-foreground">{strings.account.deleteAllowNote}</p>
 				{forms > 0 ? (
 					// Said before the button, not after pressing it. The server refuses all the same.
 					<p role="status" className="rounded-lg border px-4 py-3">
@@ -121,9 +122,9 @@ function AccountPage() {
 							label={strings.account.delete}
 							title={strings.account.deleteDialog}
 							confirmLabel={strings.account.deleteConfirm}
-							typed={{ label: strings.account.deleteType(user.email), expected: user.email }}
-							onConfirm={async (confirm) => {
-								await owner("DELETE", "account", { confirm });
+							typed={{ label: strings.account.deletePassword, password: true }}
+							onConfirm={async (password) => {
+								await owner("DELETE", "account", { password });
 								await router.invalidate();
 								await router.navigate({ to: "/login" });
 							}}

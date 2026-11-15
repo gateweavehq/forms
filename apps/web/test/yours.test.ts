@@ -123,9 +123,13 @@ describe("a copy of the consent", () => {
 		const page = await forms.fetch(`/f/home-baking/consent?v=${state.version}`);
 		expect(page.status).toBe(200);
 		expect(await page.text()).toContain("I have read this and agree to take part.");
-		// A version the form never had falls back to the current wording.
+		// A version the form never had is not found. It used to show the current wording, which
+		// under an id that was used again would pass another form's text off as what was agreed.
 		const unknown = await forms.fetch(`/f/home-baking/consent?v=${"0".repeat(64)}`);
-		expect(unknown.status).toBe(200);
+		expect(unknown.status).toBe(404);
+		// What the page shows, without the data its script carries for the form's other pages.
+		const shown = (await unknown.text()).replace(/<script[\s\S]*?<\/script>/g, "");
+		expect(shown).not.toContain("I have read this and agree to take part.");
 	});
 
 	it("reads no cookie and sets none", async () => {

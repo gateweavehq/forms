@@ -7,18 +7,20 @@ import {
 	withdrawalOf,
 } from "@gateweave/forms-schema";
 import { type ImportReport, importTally } from "@gateweave/forms-tally-import";
-import { and, count, eq, inArray, notExists, sql } from "drizzle-orm";
+import { and, count, eq, ne, notExists, sql } from "drizzle-orm";
 import type { CurrentUser } from "./auth";
-import type { Database } from "./db";
+import { type Database, runBatch } from "./db";
 import {
 	answer,
 	definition as definitions,
 	detachedAnswer,
 	form as forms,
 	response,
+	retiredFormId,
 	user as users,
 } from "./db/schema";
 import { examples, type FormState, hashOf, readStored } from "./forms";
+import { deleteFormStatements, replaceDefinitionStatements } from "./statements";
 
 /**
  * Thrown for a form that is missing, belongs to someone else, or is asked for by nobody signed
@@ -245,7 +247,7 @@ export async function createForm(
 		409,
 		`The id "${id}" is taken. A form's id is its address, so each needs its own: change "id" in the definition.`,
 	);
-	const [held, answered, kept] = await db.batch([
+	const [held, answered, kept, retired] = await db.batch([
 		db.select({ id: forms.id }).from(forms).where(eq(forms.id, id)).limit(1),
 		db.select({ id: response.id }).from(response).where(eq(response.formId, id)).limit(1),
 		db
@@ -253,8 +255,15 @@ export async function createForm(
 			.from(detachedAnswer)
 			.where(eq(detachedAnswer.formId, id))
 			.limit(1),
+		// The id of a form that was deleted stays with the account that had it: a link to the
+		// old form must not open another person's. The account may be gone; the id is not free.
+		db
+			.select({ id: retiredFormId.formId })
+			.from(retiredFormId)
+			.where(and(eq(retiredFormId.formId, id), ne(retiredFormId.ownerId, user.id)))
+			.limit(1),
 	]);
-	if (held.length > 0 || answered.length > 0 || kept.length > 0) throw taken;
+	if (held.length > 0 || answered.length > 0 || kept.length > 0 || retired.length > 0) throw taken;
 	const hash = await hashOf(definition);
 	const now = Date.now();
 	try {
@@ -316,23 +325,21 @@ export async function replaceDefinition(db: Database, row: FormRow, input: unkno
 	const refusal = row.state === "open" ? notOpenable(definition) : undefined;
 	if (refusal) throw refusal;
 	const hash = await hashOf(definition);
-	const [, replaced] = await db.batch([
-		db
-			.insert(definitions)
-			.values({ hash, formId: row.id, json: JSON.stringify(definition) })
-			.onConflictDoNothing(),
-		db
-			.update(forms)
-			.set({ definitionHash: hash, title: definition.title, updatedAt: Date.now() })
-			// Asked again by the statement: the form may have been opened since its row was read.
-			.where(
-				and(
-					eq(forms.id, row.id),
-					definition.controller ? undefined : sql`${forms.state} <> 'open'`,
-				),
-			),
-	]);
-	if (replaced.meta.changes === 0) throw notOpenable(definition) ?? new NotFound();
+	// Asked again by the statements: the form may have been opened or deleted since its row was
+	// read. A replace that loses writes nothing, its definition's row included.
+	const changed = await runBatch(
+		db.$client,
+		replaceDefinitionStatements({
+			formId: row.id,
+			ownerId: row.ownerId,
+			hash,
+			json: JSON.stringify(definition),
+			title: definition.title,
+			hasController: definition.controller !== undefined,
+			now: Date.now(),
+		}),
+	);
+	if (!changed.at(-1)) throw notOpenable(definition) ?? new NotFound();
 }
 
 /**
@@ -470,35 +477,44 @@ export async function holdings(db: Database, row: FormRow) {
  * its definitions stay.
  */
 export async function deleteAllResponses(db: Database, row: FormRow): Promise<void> {
-	await db.batch([
-		db.delete(response).where(eq(response.formId, row.id)),
-		db.delete(detachedAnswer).where(eq(detachedAnswer.formId, row.id)),
-	]);
+	await allOrNothing(() =>
+		db.batch([
+			db.delete(response).where(eq(response.formId, row.id)),
+			db.delete(detachedAnswer).where(eq(detachedAnswer.formId, row.id)),
+		]),
+	);
+}
+
+/**
+ * Runs a batch that deletes a great deal, and says so in words when the database would not do
+ * it. A batch is one transaction: when it fails, nothing of it happened. The usual reason is
+ * size: a form with very many answers can be more than the database deletes in one step, or
+ * more rows than the account may write in a day. The person has to know that nothing was
+ * deleted, and what they can do, which a bare "something went wrong" does not tell them.
+ */
+async function allOrNothing(batch: () => Promise<unknown>): Promise<void> {
+	try {
+		await batch();
+	} catch (error) {
+		console.error(`owner: delete failed, ${error instanceof Error ? error.name : "failure"}`);
+		throw new Refused(
+			503,
+			"The database could not delete this in one step, so nothing was deleted. A form with very many answers can be too much for one step: delete responses one at a time on the Responses page to make it smaller, then try again, or ask whoever runs this server.",
+		);
+	}
 }
 
 /**
  * Deletes a form and everything under its id: every response with its answers, what it kept
  * apart, the form's row and every definition it has had, the counts of withdrawn responses
- * with them. One batch, so that it is all there or all gone. Nothing is left that would keep
- * the id from being used again.
+ * with them. One batch, so that it is all there or all gone. What is left is the id itself,
+ * retired to the account that had it (`retired_form_id`): old links to the form are still out
+ * there, and must never open a form of someone else's.
  */
 export async function deleteForm(db: Database, row: FormRow): Promise<void> {
-	await db.batch([
-		// The answers first and by name, not left to the table's ON DELETE.
-		db
-			.delete(answer)
-			.where(
-				inArray(
-					answer.responseId,
-					db.select({ id: response.id }).from(response).where(eq(response.formId, row.id)),
-				),
-			),
-		db.delete(response).where(eq(response.formId, row.id)),
-		db.delete(detachedAnswer).where(eq(detachedAnswer.formId, row.id)),
-		// The form before its definitions: it points at one of them.
-		db.delete(forms).where(eq(forms.id, row.id)),
-		db.delete(definitions).where(eq(definitions.formId, row.id)),
-	]);
+	await allOrNothing(() =>
+		runBatch(db.$client, deleteFormStatements({ id: row.id, ownerId: row.ownerId })),
+	);
 }
 
 /**

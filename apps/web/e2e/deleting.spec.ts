@@ -96,7 +96,13 @@ test("deletes an account only once it has no forms, and says so before", async (
 	const dialog = page.getByRole("dialog");
 	const confirm = dialog.getByRole("button", { name: "Delete the account" });
 	await expect(confirm).toBeDisabled();
-	await dialog.getByRole("textbox").fill(email);
+	// The account's password, not its address: a wrong one is refused, and says so.
+	await dialog.getByLabel("Your current password, to confirm").fill("not-the-password");
+	await confirm.click();
+	await expect(dialog.getByRole("alert")).toHaveText(
+		"The password is not right, so the account was not deleted.",
+	);
+	await dialog.getByLabel("Your current password, to confirm").fill("correct-horse-battery");
 	await confirm.click();
 
 	// Signed out, and the account is gone: its address and password open nothing.

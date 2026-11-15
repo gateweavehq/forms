@@ -46,6 +46,9 @@ export const strings = {
 		deleteTitle: "Delete this account",
 		deleteLead:
 			"Removes your name, your email address, your password and your sessions. An account that still has forms cannot be deleted.",
+		/** On a server that takes accounts from a list, the address stays on the list. */
+		deleteAllowNote:
+			"If this server takes new accounts from a list, your address stays on that list, and whoever signs up with it next gets a new account. Ask whoever runs the server to take it off.",
 		/** While the account owns forms: what has to happen first, and where. */
 		deleteBlocked: (forms: number) =>
 			forms === 1
@@ -55,7 +58,7 @@ export const strings = {
 		deleteDialog: "Delete your account?",
 		deleteBody:
 			"This removes the account and signs you out everywhere, and the app cannot bring it back. Whoever runs this server can still restore the database as it was for up to 30 days.",
-		deleteType: (email: string) => `Type your email address, ${email}, to confirm`,
+		deletePassword: "Your current password, to confirm",
 		deleteConfirm: "Delete the account",
 	},
 	owner: {
@@ -310,7 +313,7 @@ export const strings = {
 						: `${detached} ${detached === 1 ? "answer" : "answers"} kept apart`
 				}, and ${versions} ${versions === 1 ? "version" : "versions"} of its definition.`,
 			deleteFormBody:
-				"All of it is removed in one step, and the app cannot bring it back. Anyone answering right now loses their place, and the form's link stops working. Export first if you need the data. Whoever runs this server can still restore the database as it was for up to 30 days.",
+				"All of it is removed in one step, and the app cannot bring it back. Anyone answering right now loses their place, and the form's link stops working. Its id stays yours: you can bring a form in under it again, and nobody else can, so that an old link never opens someone else's form. Export first if you need the data. Whoever runs this server can still restore the database as it was for up to 30 days.",
 			deleteFormType: (id: string) => `Type the form's id, ${id}, to confirm`,
 			deleteFormConfirm: "Delete the form",
 		},
@@ -407,7 +410,8 @@ export const strings = {
 					"Whether you started on a phone, a tablet or a desk screen, judged by the width of the window.",
 				position: "Which card you are on, so that you can continue on another device.",
 				createdAt: "When you started.",
-				updatedAt: "When you last answered.",
+				updatedAt:
+					"When your response last changed: an answer given or changed, a move to another card, or finishing.",
 				completedAt: "When you finished.",
 			},
 			answer: {
@@ -429,7 +433,7 @@ export const strings = {
 		withdrawDoes:
 			"Taking your answers back deletes your response, every answer in it and the times that go with them, in one step. It is done from the address of your answers, on any device that has it.",
 		withdrawCount:
-			"One thing is kept: a count of how many people took their answers back. It is a number for the form, and says neither who nor when.",
+			"Whoever runs the form sees that a response is gone from their list, and may have looked at its answers before. A count of how many responses were taken back is kept as well. It holds no name and no time; what it adds for them is that a response which is gone was taken back by the person who gave it.",
 		withdrawDetached:
 			"What this form keeps apart stays. Nothing connects it to your response, so it cannot be found from your address. To have it removed, ask whoever runs the form.",
 		withdrawCopies:

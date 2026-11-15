@@ -1,4 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import {
+	keepApartStatement,
+	type Statement,
+	startStatements,
+	withdrawStatements,
+} from "../src/server/statements";
 import { as, signUp } from "./accounts";
 import { type Forms, startForms } from "./forms-worker";
 import { plantForm } from "./made-up";
@@ -220,6 +226,24 @@ describe("taking a finished response back", () => {
 		expect(await withdrawnCount(id)).toEqual([0, 1]);
 	});
 
+	it("stays out of reach for a response begun under until-complete, when the form later says until-closed", async () => {
+		const { cookie, id } = await openForm("until-complete");
+		const told = await finished(id);
+		// The form's rule is loosened. The person was told "until you finish", and a study that
+		// counted on that keeps it for the responses it was said to.
+		const replaced = await call(cookie, "POST", `forms/${id}/definition`, {
+			definition: { ...plantForm(id), withdrawal: "until-closed" },
+		});
+		expect(replaced.status).toBe(200);
+		expect(await state(told)).toMatchObject({ completed: true, canWithdraw: false });
+		expect((await withdraw(told)).status).toBe(409);
+		expect(await count("response", "id", told.id)).toBe(1);
+		// A response begun since goes by the new rule.
+		const later = await finished(id);
+		expect(await state(later)).toMatchObject({ canWithdraw: true });
+		expect((await withdraw(later)).status).toBe(200);
+	});
+
 	it("works for an example that belongs to nobody, which is open while it is served", async () => {
 		const started = await start("home-baking");
 		await answer(started, "years", 4);
@@ -328,5 +352,114 @@ describe("what the pages say about taking answers back", () => {
 		const page = await (await forms.fetch("/f/home-baking/consent")).text();
 		expect(page).toContain("also after you finish, for as long as this form is open");
 		expect(page).toContain("Made-up Bread Study, Example Institute");
+	});
+});
+
+/**
+ * What no pair of real requests can be made to do on purpose: the other request first. The
+ * server builds its statements from what it read; here they are built from the same reading
+ * and run after the other request has changed what was read.
+ */
+describe("a statement that arrives after what it was decided on has changed", () => {
+	async function run(statements: Statement[]): Promise<number[]> {
+		const results = await forms.db.batch(
+			statements.map(({ sql, params }) => forms.db.prepare(sql).bind(...params)),
+		);
+		return results.map((result: { meta: { changes?: number } }) => result.meta.changes ?? 0);
+	}
+
+	async function hashOf(responseId: string): Promise<string> {
+		const row = await forms.db
+			.prepare("SELECT definition_hash FROM response WHERE id = ?")
+			.bind(responseId)
+			.first<{ definition_hash: string }>();
+		return row?.definition_hash ?? "";
+	}
+
+	it("withdraws nothing from a form that was closed after the server looked", async () => {
+		const { cookie, id } = await openForm();
+		const started = await finished(id);
+		// What the server builds while the form is open: a complete response may go.
+		const statements = withdrawStatements({
+			responseId: started.id,
+			definitionHash: await hashOf(started.id),
+			afterCompletion: true,
+		});
+		expect((await setState(cookie, id, "closed")).status).toBe(200);
+
+		expect(await run(statements)).toEqual([0, 0, 0]);
+		expect(await count("response", "id", started.id)).toBe(1);
+		expect(await count("answer", "response_id", started.id)).toBe(1);
+		expect(await withdrawnCount(id)).toEqual([0]);
+
+		// The same statements, with the form open again, do what they say.
+		expect((await setState(cookie, id, "open")).status).toBe(200);
+		expect(await run(statements)).toEqual([1, 1, 1]);
+		expect(await count("response", "id", started.id)).toBe(0);
+		expect(await withdrawnCount(id)).toEqual([1]);
+	});
+
+	it("withdraws nothing from a response that was completed after the server looked, when it may not go complete", async () => {
+		const { id } = await openForm("until-complete");
+		const started = await start(id);
+		await answer(started, "count", 1);
+		// Built while the response was unfinished, under a rule that lets go of nothing after.
+		const statements = withdrawStatements({
+			responseId: started.id,
+			definitionHash: await hashOf(started.id),
+			afterCompletion: false,
+		});
+		await complete(started);
+		expect(await run(statements)).toEqual([0, 0, 0]);
+		expect(await count("response", "id", started.id)).toBe(1);
+		expect(await withdrawnCount(id)).toEqual([0]);
+	});
+
+	it("starts no response and keeps nothing apart for a form that was closed or deleted after the server looked", async () => {
+		const begin = (formId: string, hash: string, responseId: string) =>
+			startStatements({
+				id: responseId,
+				formId,
+				hash,
+				json: JSON.stringify(plantForm(formId)),
+				answersVersion: 1,
+				seal: "a-seal",
+				device: "desk",
+				now: 1,
+			});
+		const keep = (formId: string, key: number) =>
+			keepApartStatement({ id: key, formId, answers: '{"email":"reader@example.test"}' });
+		const currentHash = async (formId: string) =>
+			(
+				await forms.db
+					.prepare("SELECT definition_hash AS hash FROM form WHERE id = ?")
+					.bind(formId)
+					.first<{ hash: string }>()
+			)?.hash ?? "";
+
+		// Closed in between.
+		const closed = await openForm();
+		const closedHash = await currentHash(closed.id);
+		// While it is open, the statements do what they say.
+		expect(await run(begin(closed.id, closedHash, "while-open-1"))).toEqual([0, 1]);
+		expect(await run([keep(closed.id, 4711)])).toEqual([1]);
+		await setState(closed.cookie, closed.id, "closed");
+		expect(await run(begin(closed.id, closedHash, "after-close-1"))).toEqual([0, 0]);
+		expect(await run([keep(closed.id, 4712)])).toEqual([0]);
+		expect(await count("response", "form_id", closed.id)).toBe(1);
+		expect(await count("detached_answer", "form_id", closed.id)).toBe(1);
+
+		// Deleted in between: nothing is written under an id that is nobody's form.
+		const deleted = await openForm();
+		const deletedHash = await currentHash(deleted.id);
+		const gone = await call(deleted.cookie, "DELETE", `forms/${deleted.id}`, {
+			confirm: deleted.id,
+		});
+		expect(gone.status).toBe(200);
+		expect(await run(begin(deleted.id, deletedHash, "after-delete-1"))).toEqual([0, 0]);
+		expect(await run([keep(deleted.id, 4713)])).toEqual([0]);
+		expect(await count("response", "form_id", deleted.id)).toBe(0);
+		expect(await count("detached_answer", "form_id", deleted.id)).toBe(0);
+		expect(await count("definition", "form_id", deleted.id)).toBe(0);
 	});
 });
