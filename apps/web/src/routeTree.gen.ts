@@ -21,12 +21,17 @@ import { Route as ApiOwnerSplatRouteImport } from './routes/api/owner/$'
 import { Route as ApiResponsesResponseRouteImport } from './routes/api/responses/$response'
 import { Route as FFormIndexRouteImport } from './routes/f/$form/index'
 import { Route as FormsFormIndexRouteImport } from './routes/forms/$form/index'
+import { Route as FormsFormDetachedRouteImport } from './routes/forms/$form/detached'
+import { Route as FormsFormItemsRouteImport } from './routes/forms/$form/items'
+import { Route as FormsFormQuestionsRouteImport } from './routes/forms/$form/questions'
 import { Route as FormsFormSettingsRouteImport } from './routes/forms/$form/settings'
 import { Route as ApiFormsFormDetachedRouteImport } from './routes/api/forms/$form.detached'
 import { Route as ApiFormsFormResponsesRouteImport } from './routes/api/forms/$form.responses'
 import { Route as ApiResponsesResponseCompleteRouteImport } from './routes/api/responses/$response.complete'
 import { Route as ApiResponsesResponseProgressRouteImport } from './routes/api/responses/$response.progress'
 import { Route as FFormRResponseRouteImport } from './routes/f/$form/r.$response'
+import { Route as FormsFormResponsesIndexRouteImport } from './routes/forms/$form/responses.index'
+import { Route as FormsFormResponsesResponseRouteImport } from './routes/forms/$form/responses.$response'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -88,6 +93,21 @@ const FormsFormIndexRoute = FormsFormIndexRouteImport.update({
   path: '/',
   getParentRoute: () => FormsFormRoute,
 } as any)
+const FormsFormDetachedRoute = FormsFormDetachedRouteImport.update({
+  id: '/detached',
+  path: '/detached',
+  getParentRoute: () => FormsFormRoute,
+} as any)
+const FormsFormItemsRoute = FormsFormItemsRouteImport.update({
+  id: '/items',
+  path: '/items',
+  getParentRoute: () => FormsFormRoute,
+} as any)
+const FormsFormQuestionsRoute = FormsFormQuestionsRouteImport.update({
+  id: '/questions',
+  path: '/questions',
+  getParentRoute: () => FormsFormRoute,
+} as any)
 const FormsFormSettingsRoute = FormsFormSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -120,6 +140,17 @@ const FFormRResponseRoute = FFormRResponseRouteImport.update({
   path: '/r/$response',
   getParentRoute: () => FFormRoute,
 } as any)
+const FormsFormResponsesIndexRoute = FormsFormResponsesIndexRouteImport.update({
+  id: '/responses/',
+  path: '/responses/',
+  getParentRoute: () => FormsFormRoute,
+} as any)
+const FormsFormResponsesResponseRoute =
+  FormsFormResponsesResponseRouteImport.update({
+    id: '/responses/$response',
+    path: '/responses/$response',
+    getParentRoute: () => FormsFormRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -132,6 +163,9 @@ export interface FileRoutesByFullPath {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/owner/$': typeof ApiOwnerSplatRoute
   '/api/responses/$response': typeof ApiResponsesResponseRouteWithChildren
+  '/forms/$form/detached': typeof FormsFormDetachedRoute
+  '/forms/$form/items': typeof FormsFormItemsRoute
+  '/forms/$form/questions': typeof FormsFormQuestionsRoute
   '/forms/$form/settings': typeof FormsFormSettingsRoute
   '/f/$form/': typeof FFormIndexRoute
   '/forms/$form/': typeof FormsFormIndexRoute
@@ -140,6 +174,8 @@ export interface FileRoutesByFullPath {
   '/api/responses/$response/complete': typeof ApiResponsesResponseCompleteRoute
   '/api/responses/$response/progress': typeof ApiResponsesResponseProgressRoute
   '/f/$form/r/$response': typeof FFormRResponseRoute
+  '/forms/$form/responses/$response': typeof FormsFormResponsesResponseRoute
+  '/forms/$form/responses/': typeof FormsFormResponsesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -150,6 +186,9 @@ export interface FileRoutesByTo {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/owner/$': typeof ApiOwnerSplatRoute
   '/api/responses/$response': typeof ApiResponsesResponseRouteWithChildren
+  '/forms/$form/detached': typeof FormsFormDetachedRoute
+  '/forms/$form/items': typeof FormsFormItemsRoute
+  '/forms/$form/questions': typeof FormsFormQuestionsRoute
   '/forms/$form/settings': typeof FormsFormSettingsRoute
   '/f/$form': typeof FFormIndexRoute
   '/forms/$form': typeof FormsFormIndexRoute
@@ -158,6 +197,8 @@ export interface FileRoutesByTo {
   '/api/responses/$response/complete': typeof ApiResponsesResponseCompleteRoute
   '/api/responses/$response/progress': typeof ApiResponsesResponseProgressRoute
   '/f/$form/r/$response': typeof FFormRResponseRoute
+  '/forms/$form/responses/$response': typeof FormsFormResponsesResponseRoute
+  '/forms/$form/responses': typeof FormsFormResponsesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -171,6 +212,9 @@ export interface FileRoutesById {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/owner/$': typeof ApiOwnerSplatRoute
   '/api/responses/$response': typeof ApiResponsesResponseRouteWithChildren
+  '/forms/$form/detached': typeof FormsFormDetachedRoute
+  '/forms/$form/items': typeof FormsFormItemsRoute
+  '/forms/$form/questions': typeof FormsFormQuestionsRoute
   '/forms/$form/settings': typeof FormsFormSettingsRoute
   '/f/$form/': typeof FFormIndexRoute
   '/forms/$form/': typeof FormsFormIndexRoute
@@ -179,6 +223,8 @@ export interface FileRoutesById {
   '/api/responses/$response/complete': typeof ApiResponsesResponseCompleteRoute
   '/api/responses/$response/progress': typeof ApiResponsesResponseProgressRoute
   '/f/$form/r/$response': typeof FFormRResponseRoute
+  '/forms/$form/responses/$response': typeof FormsFormResponsesResponseRoute
+  '/forms/$form/responses/': typeof FormsFormResponsesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -193,6 +239,9 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/owner/$'
     | '/api/responses/$response'
+    | '/forms/$form/detached'
+    | '/forms/$form/items'
+    | '/forms/$form/questions'
     | '/forms/$form/settings'
     | '/f/$form/'
     | '/forms/$form/'
@@ -201,6 +250,8 @@ export interface FileRouteTypes {
     | '/api/responses/$response/complete'
     | '/api/responses/$response/progress'
     | '/f/$form/r/$response'
+    | '/forms/$form/responses/$response'
+    | '/forms/$form/responses/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -211,6 +262,9 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/owner/$'
     | '/api/responses/$response'
+    | '/forms/$form/detached'
+    | '/forms/$form/items'
+    | '/forms/$form/questions'
     | '/forms/$form/settings'
     | '/f/$form'
     | '/forms/$form'
@@ -219,6 +273,8 @@ export interface FileRouteTypes {
     | '/api/responses/$response/complete'
     | '/api/responses/$response/progress'
     | '/f/$form/r/$response'
+    | '/forms/$form/responses/$response'
+    | '/forms/$form/responses'
   id:
     | '__root__'
     | '/'
@@ -231,6 +287,9 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/owner/$'
     | '/api/responses/$response'
+    | '/forms/$form/detached'
+    | '/forms/$form/items'
+    | '/forms/$form/questions'
     | '/forms/$form/settings'
     | '/f/$form/'
     | '/forms/$form/'
@@ -239,6 +298,8 @@ export interface FileRouteTypes {
     | '/api/responses/$response/complete'
     | '/api/responses/$response/progress'
     | '/f/$form/r/$response'
+    | '/forms/$form/responses/$response'
+    | '/forms/$form/responses/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -342,6 +403,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FormsFormIndexRouteImport
       parentRoute: typeof FormsFormRoute
     }
+    '/forms/$form/detached': {
+      id: '/forms/$form/detached'
+      path: '/detached'
+      fullPath: '/forms/$form/detached'
+      preLoaderRoute: typeof FormsFormDetachedRouteImport
+      parentRoute: typeof FormsFormRoute
+    }
+    '/forms/$form/items': {
+      id: '/forms/$form/items'
+      path: '/items'
+      fullPath: '/forms/$form/items'
+      preLoaderRoute: typeof FormsFormItemsRouteImport
+      parentRoute: typeof FormsFormRoute
+    }
+    '/forms/$form/questions': {
+      id: '/forms/$form/questions'
+      path: '/questions'
+      fullPath: '/forms/$form/questions'
+      preLoaderRoute: typeof FormsFormQuestionsRouteImport
+      parentRoute: typeof FormsFormRoute
+    }
     '/forms/$form/settings': {
       id: '/forms/$form/settings'
       path: '/settings'
@@ -384,6 +466,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FFormRResponseRouteImport
       parentRoute: typeof FFormRoute
     }
+    '/forms/$form/responses/': {
+      id: '/forms/$form/responses/'
+      path: '/responses'
+      fullPath: '/forms/$form/responses/'
+      preLoaderRoute: typeof FormsFormResponsesIndexRouteImport
+      parentRoute: typeof FormsFormRoute
+    }
+    '/forms/$form/responses/$response': {
+      id: '/forms/$form/responses/$response'
+      path: '/responses/$response'
+      fullPath: '/forms/$form/responses/$response'
+      preLoaderRoute: typeof FormsFormResponsesResponseRouteImport
+      parentRoute: typeof FormsFormRoute
+    }
   }
 }
 
@@ -400,13 +496,23 @@ const FFormRouteChildren: FFormRouteChildren = {
 const FFormRouteWithChildren = FFormRoute._addFileChildren(FFormRouteChildren)
 
 interface FormsFormRouteChildren {
+  FormsFormDetachedRoute: typeof FormsFormDetachedRoute
+  FormsFormItemsRoute: typeof FormsFormItemsRoute
+  FormsFormQuestionsRoute: typeof FormsFormQuestionsRoute
   FormsFormSettingsRoute: typeof FormsFormSettingsRoute
   FormsFormIndexRoute: typeof FormsFormIndexRoute
+  FormsFormResponsesResponseRoute: typeof FormsFormResponsesResponseRoute
+  FormsFormResponsesIndexRoute: typeof FormsFormResponsesIndexRoute
 }
 
 const FormsFormRouteChildren: FormsFormRouteChildren = {
+  FormsFormDetachedRoute: FormsFormDetachedRoute,
+  FormsFormItemsRoute: FormsFormItemsRoute,
+  FormsFormQuestionsRoute: FormsFormQuestionsRoute,
   FormsFormSettingsRoute: FormsFormSettingsRoute,
   FormsFormIndexRoute: FormsFormIndexRoute,
+  FormsFormResponsesResponseRoute: FormsFormResponsesResponseRoute,
+  FormsFormResponsesIndexRoute: FormsFormResponsesIndexRoute,
 }
 
 const FormsFormRouteWithChildren = FormsFormRoute._addFileChildren(

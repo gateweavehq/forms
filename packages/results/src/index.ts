@@ -36,3 +36,4 @@ export {
 	summarise,
 	type Tally,
 } from "./summaries";
+export { type AnswerLine, inWords, type ResponseSection, responseLines } from "./words";

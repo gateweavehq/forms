@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { codebookCsv, detachedCsv, responsesCsv } from "@gateweave/forms-results";
 import { z } from "zod";
 import { type CurrentUser, currentUser, db } from "./auth";
 import { readCapped, TooLarge } from "./body";
@@ -14,6 +15,7 @@ import {
 	replaceDefinition,
 	setState,
 } from "./owner";
+import { loadDetached, loadRecords, versionOf } from "./results";
 
 /**
  * The most bytes an owner may send. A Tally form's page data runs to a megabyte or two, which
@@ -33,6 +35,25 @@ const stateBody = z.strictObject({ state: z.enum(["draft", "open", "closed"]) })
 
 function json(body: unknown, status = 200): Response {
 	return Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
+}
+
+/**
+ * A CSV file to save. A form's id is lowercase letters, digits, `-` and `_`, so the name needs
+ * no quoting. It is never kept by anything between the server and the person.
+ */
+function csv(name: string, text: string): Response {
+	return new Response(text, {
+		headers: {
+			"Content-Type": "text/csv; charset=utf-8",
+			"Content-Disposition": `attachment; filename="${name}.csv"`,
+			"Cache-Control": "no-store",
+		},
+	});
+}
+
+/** The version an export is asked for, as `?v=`. */
+function versionAsked(request: Request): string | undefined {
+	return new URL(request.url).searchParams.get("v") ?? undefined;
 }
 
 /** The one answer for a form that is missing, someone else's, or asked for without a session. */
@@ -110,6 +131,34 @@ const routes: Array<[method: string, path: string, handler: Handler]> = [
 			const { state } = await read(request, stateBody);
 			await setState(db, row, state);
 			return json({ state });
+		},
+	],
+	[
+		"GET",
+		"forms/:/export/responses.csv",
+		async (user, request, [formId = ""]) => {
+			const row = await ownedForm(db, user, formId);
+			const { hash, definition } = await versionOf(db, row, versionAsked(request));
+			const records = await loadRecords(db, row, hash);
+			return csv(`${row.id}-responses-${hash.slice(0, 8)}`, responsesCsv(definition, records));
+		},
+	],
+	[
+		"GET",
+		"forms/:/export/codebook.csv",
+		async (user, request, [formId = ""]) => {
+			const row = await ownedForm(db, user, formId);
+			const { hash, definition } = await versionOf(db, row, versionAsked(request));
+			return csv(`${row.id}-codebook-${hash.slice(0, 8)}`, codebookCsv(definition));
+		},
+	],
+	[
+		"GET",
+		"forms/:/export/detached.csv",
+		async (user, _request, [formId = ""]) => {
+			const row = await ownedForm(db, user, formId);
+			const { questions, rows } = await loadDetached(db, row);
+			return csv(`${row.id}-kept-apart`, detachedCsv(questions, rows));
 		},
 	],
 	[

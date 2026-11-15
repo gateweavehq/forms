@@ -1,6 +1,7 @@
 import { createFileRoute, Link, notFound, Outlet } from "@tanstack/react-router";
 import { Notice } from "#/components/notice";
 import { getOwnedForm } from "#/lib/owner";
+import { resultsSearch } from "#/lib/results";
 import { strings } from "#/lib/strings";
 
 const t = strings.owner;
@@ -10,6 +11,9 @@ const t = strings.owner;
  * a missing form, someone else's and a visitor who is not signed in all get "not found".
  */
 export const Route = createFileRoute("/forms/$form")({
+	// Which version and which responses the results count. Every tab reads them, so they
+	// are kept when moving between tabs.
+	validateSearch: resultsSearch,
 	loader: async ({ params }) => {
 		const form = await getOwnedForm({ data: params.form });
 		if (!form) throw notFound();
@@ -24,6 +28,10 @@ export const Route = createFileRoute("/forms/$form")({
 
 const tabs = [
 	["/forms/$form", t.nav.overview],
+	["/forms/$form/items", t.nav.items],
+	["/forms/$form/questions", t.nav.questions],
+	["/forms/$form/responses", t.nav.responses],
+	["/forms/$form/detached", t.nav.detached],
 	["/forms/$form/settings", t.nav.settings],
 ] as const;
 
@@ -52,6 +60,7 @@ function FormLayout() {
 						key={to}
 						to={to}
 						params={{ form: form.id }}
+						search={true}
 						// The overview is the form's own address, which every other tab's begins with.
 						activeOptions={{ exact: to === "/forms/$form" }}
 						className="inline-flex min-h-11 items-center rounded-md px-3 text-sm font-medium text-muted-foreground hover:bg-accent aria-[current=page]:bg-accent aria-[current=page]:text-foreground"
