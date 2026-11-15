@@ -150,27 +150,31 @@ describe("bringing a form in", () => {
 	it("refuses a rule nested without end, and never with a fault of its own", async () => {
 		const cookie = await signUp(forms);
 		const id = freshId();
-		let rule: unknown = { question: "light", is: "bright" };
-		for (let level = 0; level < 20_000; level++) rule = { not: rule };
-		const deep = plantForm(id) as { sections: Array<{ questions?: Array<{ showIf?: unknown }> }> };
-		const second = deep.sections[0]?.questions?.[1];
+		// The rule is written out as text, not built and passed to JSON.stringify: 20,000 levels
+		// run this process out of stack on some machines, and the stack under test is the server's.
+		const levels = 20_000;
+		const rule = `${'{"not":'.repeat(levels)}{"question":"light","is":"bright"}${"}".repeat(levels)}`;
+		const form = plantForm(id) as { sections: Array<{ questions?: Array<{ showIf?: unknown }> }> };
+		const second = form.sections[0]?.questions?.[1];
 		if (!second) throw new Error("The form has no second question");
-		second.showIf = rule;
+		second.showIf = "THE RULE";
+		const deep = JSON.stringify(form).replace('"THE RULE"', rule);
+		expect(deep).toContain(rule);
 
-		const previewed = await call(cookie, "POST", "preview", {
-			kind: "definition",
-			text: JSON.stringify(deep),
-		});
+		const previewed = await call(cookie, "POST", "preview", { kind: "definition", text: deep });
 		expect(previewed.status).toBe(200);
 		const result = (await previewed.json()) as { ok: boolean; problems: string[] };
 		expect(result.ok).toBe(false);
 		expect(result.problems.join()).toContain("nested more than 32 levels");
 
-		const created = await call(cookie, "POST", "forms", { definition: deep });
+		const created = await forms.fetch(
+			"/api/owner/forms",
+			as(cookie, { method: "POST", body: `{"definition":${deep}}` }),
+		);
 		expect(created.status).toBe(400);
 		const asTally = await call(cookie, "POST", "preview", {
 			kind: "tally",
-			text: JSON.stringify({ blocks: [{ payload: rule }] }),
+			text: `{"blocks":[{"payload":${rule}}]}`,
 		});
 		expect(asTally.status).toBe(200);
 		expect(await asTally.json()).toMatchObject({ ok: false });
