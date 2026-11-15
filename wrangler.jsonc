@@ -10,9 +10,10 @@
 	// Settings made in the dashboard stay through a deploy. Wrangler otherwise removes a plain-text
 	// variable it does not find here, so the next push would quietly take away a setting.
 	"keep_vars": true,
-	// Only what the Worker writes itself is kept, and it writes counts and error names. Invocation
-	// logs record each request as it came in, which would put a respondent's network address beside
-	// the id of their response. A study that promises to store no address has to mean its logs too.
+	// Only what the Worker writes itself is kept, and it writes the names of its own errors. An
+	// invocation log holds each request, with its address (a response's id is in it) and the
+	// metadata Cloudflare has about where it came from. A study that promises to store nothing
+	// about who answered has to mean its logs too.
 	"observability": { "enabled": true, "logs": { "invocation_logs": false } },
 	"upload_source_maps": true,
 	// Responses: one row per response, one per answer, and the answers a form keeps apart.
