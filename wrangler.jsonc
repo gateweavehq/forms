@@ -33,5 +33,30 @@
 			"database_name": "gateweave-forms",
 			"migrations_dir": "apps/web/migrations"
 		}
-	]
+	],
+	// The top level is what a self-hoster deploys. Gateweave's own staging is the environment
+	// below: a separate Worker with its own database, kept in the EU (the database was created
+	// with the `eu` jurisdiction). Bindings are not inherited, so it repeats them.
+	"env": {
+		"staging": {
+			"name": "gateweave-forms-staging",
+			"routes": [{ "pattern": "forms-staging.gateweave.com", "custom_domain": true }],
+			"ratelimits": [
+				{ "name": "START_LIMIT", "namespace_id": "4772", "simple": { "limit": 120, "period": 60 } },
+				{
+					"name": "DETACHED_LIMIT",
+					"namespace_id": "4773",
+					"simple": { "limit": 60, "period": 60 }
+				}
+			],
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "gateweave-forms-staging-eu",
+					"database_id": "32435975-d9b0-4f40-a1f0-452d782f5da9",
+					"migrations_dir": "apps/web/migrations"
+				}
+			]
+		}
+	}
 }
