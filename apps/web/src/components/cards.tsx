@@ -86,6 +86,7 @@ export function SectionCard({
 			canGoBack={canGoBack}
 			onBack={() => onLeave("back")}
 			forward={strings.nav.begin}
+			resting
 		>
 			<Position id={positionId} lines={[strings.position.leg(step.leg, step.legs)]} />
 			<div className="flex flex-col gap-2">
@@ -148,6 +149,7 @@ export function FollowUpsIntroCard({
 			canGoBack
 			onBack={() => onLeave("back")}
 			forward={strings.nav.continue}
+			resting
 		>
 			<Position
 				id={positionId}

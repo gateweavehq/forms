@@ -16,21 +16,41 @@ export interface GroupMark {
 const ROOMY = 6;
 
 /**
+ * A mark. One that waits for its answer is drawn in the colour of quiet text, not of a border:
+ * it is information, and has to stand out from the card by 3 to 1 at least in both themes.
+ */
+function Dot({ mark }: { mark: GroupMark }) {
+	return (
+		<span
+			data-mark={mark.answered ? "answered" : "open"}
+			aria-hidden="true"
+			className={cn(
+				"block size-3.5 rounded-full border-2",
+				mark.answered ? "border-brand bg-brand" : "border-muted-foreground",
+				mark.current && "outline-2 outline-offset-2 outline-brand/40",
+				mark.current && !mark.answered && "border-brand",
+			)}
+		/>
+	);
+}
+
+/**
  * One small mark for each item of the group being answered: filled when it has its answer, ringed
- * when it is the one on the card. A mark of an item already seen goes back to it.
+ * when it is the one on the card.
  *
  * This is the only progress the form shows, and it is one group's worth on purpose. A bar or a
  * percentage across a long form crawls, and people who watch it crawl quit; a handful of marks
  * that fill in a minute do not. The marks count nothing and promise nothing about the rest.
  *
- * Up to six, each mark sits in a cell 44 pixels square, which is what a thumb needs. A longer
- * group cannot have that without taking two or three rows from the answers on every card, so
- * its marks stand close together, and a finger is not offered them at all: touch goes back with
- * Back, or picks an item from the look back at the group's end. A mouse and a keyboard, which
- * can hit a small mark, still can.
+ * In a group of up to six, a mark of an item already seen goes back to it, and each mark sits
+ * in a cell 44 pixels square, which is what a thumb needs. They are one stop for the Tab key,
+ * and the arrow keys move between them.
  *
- * The marks are one stop for the Tab key, and the arrow keys move between them, so a keyboard
- * does not have to walk a dozen marks to reach the answers.
+ * A longer group cannot have cells that size without taking two or three rows from the answers
+ * on every card, and a control too small for a thumb is worse than none. So its marks are a
+ * picture and nothing else, for every pointer: not buttons, not in the Tab order, and hidden
+ * from screen readers, which hear the same thing in words ("3 of 12") from the line above.
+ * Back, and the look back at the group's end, do the going back.
  */
 export function GroupMarks({
 	group,
@@ -41,8 +61,18 @@ export function GroupMarks({
 	marks: GroupMark[];
 	onOpen: (key: string) => void;
 }) {
-	const roomy = marks.length <= ROOMY;
-	const cell = roomy ? "size-11" : "h-6 w-full";
+	if (marks.length > ROOMY) {
+		return (
+			<div data-marks="picture" aria-hidden="true" className="-mx-1 flex flex-wrap">
+				{marks.map((mark) => (
+					<span key={mark.key} className="grid h-6 max-w-11 min-w-4 flex-1 place-items-center">
+						<Dot mark={mark} />
+					</span>
+				))}
+			</div>
+		);
+	}
+
 	const current = marks.findIndex((mark) => mark.current);
 	// Where Tab lands: the item just before this one, which is where "back by one" goes.
 	const open = marks.map((mark, index) => (mark.seen && !mark.current ? index : -1));
@@ -65,27 +95,13 @@ export function GroupMarks({
 			aria-label={strings.marks.label(group)}
 			// Pulled in by what the cells have around their marks, so that the row takes a mark's
 			// height on the card and starts at the text's edge.
-			className={cn("flex flex-wrap", roomy ? "-my-3 -ml-[15px]" : "-mx-1")}
+			className="-my-3 -ml-[15px] flex flex-wrap"
 			onKeyDown={onKeyDown}
 		>
 			{marks.map((mark, index) => {
-				const dot = (
-					<span
-						aria-hidden="true"
-						className={cn(
-							"block size-3.5 rounded-full border-2",
-							mark.answered ? "border-brand bg-brand" : "border-input",
-							mark.current && "outline-2 outline-offset-2 outline-brand/40",
-							mark.current && !mark.answered && "border-brand",
-						)}
-					/>
-				);
+				const dot = <Dot mark={mark} />;
 				return (
-					<li
-						key={mark.key}
-						aria-current={mark.current ? "step" : undefined}
-						className={cn(!roomy && "max-w-11 min-w-5 flex-1")}
-					>
+					<li key={mark.key} aria-current={mark.current ? "step" : undefined}>
 						{mark.seen && !mark.current ? (
 							<button
 								type="button"
@@ -95,17 +111,13 @@ export function GroupMarks({
 										? strings.marks.answered(mark.label)
 										: strings.marks.passed(mark.label)
 								}
-								className={cn(
-									"grid cursor-pointer touch-manipulation place-items-center rounded-full hover:bg-accent",
-									cell,
-									!roomy && "pointer-coarse:pointer-events-none",
-								)}
+								className="grid size-11 cursor-pointer touch-manipulation place-items-center rounded-full hover:bg-accent"
 								onClick={() => onOpen(mark.key)}
 							>
 								{dot}
 							</button>
 						) : (
-							<span className={cn("grid place-items-center", cell)}>
+							<span className="grid size-11 place-items-center">
 								{dot}
 								<span className="sr-only">
 									{mark.current

@@ -5,6 +5,7 @@ import {
 	type RefObject,
 	useEffect,
 	useRef,
+	useState,
 } from "react";
 import { cn } from "#/lib/cn";
 import { strings } from "#/lib/strings";
@@ -120,6 +121,7 @@ export function CardFrame({
 	onBack,
 	forward,
 	quiet = false,
+	resting = false,
 	children,
 }: {
 	entering: Entering;
@@ -132,27 +134,56 @@ export function CardFrame({
 	forward: string;
 	/** For "Skip": passing a question is allowed, and it should not be the loudest thing on the card. */
 	quiet?: boolean;
+	/**
+	 * The card has nothing to press inside it: an opening, an introduction. On a phone such a
+	 * card stands in the middle of the space above the bar, where it is read, instead of lying
+	 * on the bar with most of the screen empty over it. A card with answers in it lies on the
+	 * bar, where the thumb is.
+	 */
+	resting?: boolean;
 	children: ReactNode;
 }) {
+	// The arrival is played once. Its class goes when it is over, or when the card starts to
+	// leave: otherwise a second answer late in the pause, which calls the leaving off, would
+	// bring the class back alone and the card would slide in again from the side.
+	const [arrived, setArrived] = useState(false);
+	useEffect(() => {
+		if (leaving) setArrived(true);
+	}, [leaving]);
 	const submit = (event: FormEvent) => {
 		event.preventDefault();
 		onSubmit();
 	};
 	return (
-		<form className="flex flex-col" onSubmit={submit} onKeyDown={onKeyDown} noValidate>
+		<form
+			className={cn("flex flex-col", resting && "max-sm:flex-1")}
+			onSubmit={submit}
+			onKeyDown={onKeyDown}
+			noValidate
+		>
 			<div
 				data-card
 				className={cn(
 					"flex flex-col gap-4 rounded-xl border bg-card p-4 text-card-foreground shadow-xs sm:gap-5 sm:p-8",
-					entering === "back" ? "card-in-back" : "card-in-next",
+					resting && "max-sm:my-auto",
+					!arrived && (entering === "back" ? "card-in-back" : "card-in-next"),
 					leaving && "card-out pointer-events-none",
 				)}
+				onAnimationEnd={(event) => {
+					if (event.target === event.currentTarget) setArrived(true);
+				}}
 			>
 				{children}
 			</div>
+			{/*
+			 * The same line twice, each where its layout shows it: above the bar on a phone, under
+			 * it at a desk. One of the two is always `display: none`, so what the Tab key and a
+			 * screen reader meet is in the order the eye does.
+			 */}
+			<MadeWith className="sm:hidden" />
 			<div
 				data-bar
-				className="card-bar order-3 -mx-2 flex items-center gap-3 bg-page px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:order-2 sm:mx-0 sm:justify-between sm:bg-transparent sm:px-0 sm:pt-4 sm:pb-0"
+				className="card-bar -mx-2 flex items-center gap-3 bg-page px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:mx-0 sm:justify-between sm:bg-transparent sm:px-0 sm:pt-4 sm:pb-0"
 			>
 				{canGoBack && (
 					<Button variant="outline" className="min-w-24 bg-card" onClick={onBack}>
@@ -167,7 +198,7 @@ export function CardFrame({
 					{forward}
 				</Button>
 			</div>
-			<MadeWith className="order-2 sm:order-3 sm:mt-6" />
+			<MadeWith className="mt-6 max-sm:hidden" />
 		</form>
 	);
 }

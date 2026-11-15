@@ -111,6 +111,7 @@ export function GroupOpeningCard({
 			canGoBack
 			onBack={() => onLeave("back")}
 			forward={strings.nav.begin}
+			resting
 		>
 			<Position
 				id={positionId}

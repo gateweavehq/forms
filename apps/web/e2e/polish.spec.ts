@@ -15,6 +15,9 @@ import {
 
 const STOPPED = "Used to make it, but stopped";
 
+/** How long the timing test looks at its first card before answering it. */
+const LONG_LOOK_MS = 3_000;
+
 /** Up to the first item's card of the repeat leg. */
 async function toFirstItem(page: Page): Promise<void> {
 	await start(page);
@@ -217,6 +220,8 @@ test("shows the tick at once, then moves on after the same pause with or without
 		return color;
 	});
 
+	// A long look at the first card, so that its time can be told from the next card's.
+	await page.waitForTimeout(LONG_LOOK_MS);
 	await choose(page, "Never made it");
 	// The answer is filled with the accent and ticked while the card is still this one.
 	const answer = page.locator("label").filter({ hasText: "Never made it" });
@@ -237,19 +242,201 @@ test("shows the tick at once, then moves on after the same pause with or without
 	expect(still.moved).toBe("none");
 
 	// 260 ms with the tick, 90 ms of leaving, 350 ms in all: by the same timers either way.
+	// The bounds are on both sides, so a hold of 340 ms (no time left to leave in) or of 600 ms
+	// fails, and so does a pause that is not 350 ms.
 	for (const seen of [moving, still]) {
-		expect(seen.leaving - seen.chosen).toBeGreaterThanOrEqual(250);
-		expect(seen.changed - seen.chosen).toBeGreaterThanOrEqual(340);
-		expect(seen.changed - seen.chosen).toBeLessThan(700);
+		const hold = seen.leaving - seen.chosen;
+		const pause = seen.changed - seen.chosen;
+		expect(hold).toBeGreaterThanOrEqual(250);
+		expect(hold).toBeLessThan(330);
+		expect(pause - hold).toBeGreaterThanOrEqual(50);
+		expect(pause).toBeGreaterThanOrEqual(340);
+		expect(pause).toBeLessThan(500);
 	}
 	expect(Math.abs(moving.changed - moving.chosen - (still.changed - still.chosen))).toBeLessThan(
-		150,
+		100,
 	);
 
-	// What is stored for a card counts the pause, as it always has, and not the card before.
+	// What is stored for a card is the time on that card, pause included, and nothing of the
+	// card before it: the first card was looked at for three seconds, the second was not.
+	await expect
+		.poll(async () => (await stored(page)).answers.items["sourdough-loaf"]?.made?.activeMs ?? 0)
+		.toBeGreaterThanOrEqual(340);
 	const { items } = (await stored(page)).answers;
-	expect(items["sourdough-loaf"]?.made?.activeMs).toBeGreaterThanOrEqual(340);
-	expect(items["sourdough-loaf"]?.made?.activeMs).toBeLessThan(5_000);
+	expect(items["sandwich-loaf"]?.made?.activeMs).toBeGreaterThanOrEqual(LONG_LOOK_MS + 340);
+	expect(items["sourdough-loaf"]?.made?.activeMs).toBeLessThan(LONG_LOOK_MS - 500);
+});
+
+test("does not slide in again when a second answer comes as the card is leaving", async ({
+	page,
+}) => {
+	await toFirstItem(page);
+	// The first answer, and the second at the moment the card has begun to leave: the last
+	// 90 ms of the pause. What the card does next is written down from inside the page.
+	await page.evaluate(() => {
+		const tap = (label: Element) => {
+			// As a pointer does it: down on the answer, then the click.
+			label.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+			(label as HTMLElement).click();
+		};
+		const card = document.querySelector("[data-card]");
+		const answers = [...document.querySelectorAll("label:has(input[type=radio])")];
+		const first = answers[0];
+		const second = answers[1];
+		if (!card || !first || !second) throw new Error("The card is not on the page");
+		const seen = { started: [] as string[], after: "", again: false };
+		(window as unknown as { late: typeof seen }).late = seen;
+		card.addEventListener("animationstart", (event) => {
+			if (event.target === card) seen.started.push((event as AnimationEvent).animationName);
+		});
+		new MutationObserver(() => {
+			if (!card.classList.contains("card-out") || seen.again) return;
+			seen.again = true;
+			// Two frames on, as a finger would be: the card has been seen to start leaving.
+			const frames = (count: number, then: () => void) =>
+				requestAnimationFrame(() => (count > 1 ? frames(count - 1, then) : then()));
+			frames(2, () => {
+				tap(second);
+				frames(2, () => {
+					seen.after = getComputedStyle(card).animationName;
+				});
+			});
+		}).observe(card, { attributes: true });
+		tap(first);
+	});
+
+	await expect(heading(page, "Sourdough loaf")).toBeVisible();
+	const late = await page.evaluate(
+		() => (window as unknown as { late: { started: string[]; after: string } }).late,
+	);
+	// It began to leave, was called back by the second answer and stood still, then left for
+	// good. At no point did it arrive a second time: standing still it had no animation at all,
+	// and the only one it ever started was the leaving (once or twice, as the frames fell).
+	expect(late.after).toBe("none");
+	expect(late.started.length).toBeGreaterThanOrEqual(1);
+	expect(late.started.filter((name) => name !== "card-to-left")).toEqual([]);
+	await expect
+		.poll(async () => (await stored(page)).answers.items["sandwich-loaf"]?.made)
+		.toMatchObject({ value: { option: "once" }, changes: 0 });
+});
+
+test("stores the later of two answers given inside the pause, once", async ({ page }) => {
+	await toFirstItem(page);
+	const sent: string[] = [];
+	page.on("request", (request) => {
+		const body = request.postData() ?? "";
+		if (request.method() === "POST" && body.includes('"item":"sandwich-loaf"')) sent.push(body);
+	});
+	await page.evaluate(() => {
+		const tap = (label: Element) => {
+			// As a pointer does it: down on the answer, then the click.
+			label.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+			(label as HTMLElement).click();
+		};
+		const answers = [...document.querySelectorAll("label:has(input[type=radio])")];
+		const first = answers[0];
+		const later = answers[3];
+		if (!first || !later) throw new Error("The answers are not on the page");
+		tap(first);
+		setTimeout(() => tap(later), 120);
+	});
+
+	await expect(heading(page, "Sourdough loaf")).toBeVisible();
+	// One answer was given as far as the server knows: the later one, and it is not a change.
+	await expect
+		.poll(async () => (await stored(page)).answers.items["sandwich-loaf"]?.made)
+		.toMatchObject({ value: { option: "sometimes" }, changes: 0 });
+	expect(sent).toHaveLength(1);
+	expect(sent[0]).toContain('"option":"sometimes"');
+	// The pause began again at the second answer, so the card was up for both.
+	expect(
+		(await stored(page)).answers.items["sandwich-loaf"]?.made?.activeMs,
+	).toBeGreaterThanOrEqual(120 + 340);
+});
+
+test("Back inside the pause keeps the answer and goes back, and nothing moves afterwards", async ({
+	page,
+}) => {
+	await toFirstItem(page);
+	await choose(page, "Never made it");
+	await expect(heading(page, "Sourdough loaf")).toBeVisible();
+	await page.evaluate(() => {
+		const tap = (label: Element) => {
+			// As a pointer does it: down on the answer, then the click.
+			label.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+			(label as HTMLElement).click();
+		};
+		const answer = document.querySelectorAll("label:has(input[type=radio])")[2];
+		const goBack = [...document.querySelectorAll<HTMLButtonElement>("[data-bar] button")].find(
+			(button) => button.textContent === "Back",
+		);
+		if (!answer || !goBack) throw new Error("The card is not on the page");
+		tap(answer);
+		setTimeout(() => goBack.click(), 100);
+	});
+
+	await expect(heading(page, "Sandwich loaf")).toBeVisible();
+	// The answer that was on the card when Back was pressed is an answer given.
+	await expect
+		.poll(async () => (await stored(page)).answers.items["sourdough-loaf"]?.made)
+		.toMatchObject({ value: { option: "stopped" }, changes: 0 });
+	// The pause that was running went with its card: longer than it would have lasted, the
+	// person is still where Back took them.
+	await page.waitForTimeout(900);
+	await expect(heading(page, "Sandwich loaf")).toBeVisible();
+	expect((await stored(page)).position).toBe("i:sandwich-loaf:made");
+});
+
+test("adds the time of an edit from the look back, and touches no other answer", async ({
+	page,
+}) => {
+	await toFirstItem(page);
+	await answerLoaves(page, ["Make it most weeks", "Never made it", "Never made it", STOPPED]);
+	await expect.poll(async () => Object.keys((await stored(page)).answers.items)).toHaveLength(4);
+	const before = (await stored(page)).answers.items;
+
+	await page.getByRole("button", { name: "Rye bread: Never made it. Change" }).click();
+	await expect(heading(page, "Rye bread")).toBeVisible();
+	await page.waitForTimeout(600);
+	await choose(page, "Make it now and then");
+	await expect(heading(page, "Your answers: Loaves")).toBeVisible();
+
+	await expect
+		.poll(async () => (await stored(page)).answers.items["rye-bread"]?.made?.changes)
+		.toBe(1);
+	const after = (await stored(page)).answers.items;
+	const was = before["rye-bread"]?.made?.activeMs ?? 0;
+	// The second visit is added to the first, pause and all: nothing of the first is lost, and
+	// the time spent reading the look back is not counted as time on the item.
+	expect(after["rye-bread"]?.made).toMatchObject({ value: { option: "sometimes" }, changes: 1 });
+	expect(after["rye-bread"]?.made?.activeMs).toBeGreaterThanOrEqual(was + 600 + 340);
+	expect(after["rye-bread"]?.made?.activeMs).toBeLessThan(was + 5_000);
+	for (const item of ["sandwich-loaf", "sourdough-loaf", "brioche"]) {
+		expect(after[item], item).toEqual(before[item]);
+	}
+});
+
+test("another device that opens during a look back lands on the group's last item", async ({
+	page,
+	browser,
+}) => {
+	await toFirstItem(page);
+	await answerLoaves(page, ["Make it most weeks", "Never made it", "Never made it", STOPPED]);
+	await expect.poll(async () => (await stored(page)).position).toBe("i:brioche:made");
+
+	const elsewhere = await browser.newContext();
+	const second = await elsewhere.newPage();
+	await second.goto(page.url());
+	// The look back is this page's card, not a place in the form: the other device opens the
+	// step beside it, with the answer that was given there.
+	await expect(heading(second, "Brioche")).toBeVisible();
+	await expect(second.getByText("Group 1 of 3: Loaves · 4 of 4")).toBeVisible();
+	await expect(second.getByRole("radio", { name: STOPPED })).toBeChecked();
+	// One press on, and it is looking back too.
+	await second.getByRole("button", { name: "Next", exact: true }).click();
+	await expect(heading(second, "Your answers: Loaves")).toBeVisible();
+	await expect(second.getByRole("listitem").nth(3)).toHaveText(/Brioche\s*Used to make it/);
+	await elsewhere.close();
 });
 
 test("marks the items of one group, and a mark goes back to its item", async ({ page }) => {
@@ -411,6 +598,85 @@ test("opens each part and each later group with what is in it", async ({ page })
 	await skipTo(page, "Last things");
 	await expect(page.getByText("1 question", { exact: true })).toBeVisible();
 	await expect(page.getByText(/About .* minute/)).toHaveCount(0);
+});
+
+test("meets the page's parts in the order they are seen", async ({ page }) => {
+	await toFirstItem(page);
+	// "Made with" is above the bar on a phone and under it at a desk. Whichever it is, the Tab
+	// key and a screen reader come to the two in that same order.
+	const order = await page.evaluate(() => {
+		const links = [...document.querySelectorAll("a")].filter(
+			(link) =>
+				link.textContent === "Made with Gateweave Forms" && link.getClientRects().length > 0,
+		);
+		const bar = document.querySelector("[data-bar]");
+		const link = links[0];
+		if (!bar || !link) return undefined;
+		return {
+			shown: links.length,
+			seenFirst: link.getBoundingClientRect().top < bar.getBoundingClientRect().top,
+			metFirst: Boolean(link.compareDocumentPosition(bar) & Node.DOCUMENT_POSITION_FOLLOWING),
+		};
+	});
+	expect(order?.shown).toBe(1);
+	expect(order?.metFirst).toBe(order?.seenFirst);
+	const narrow = (page.viewportSize()?.width ?? 0) < 640;
+	expect(order?.seenFirst).toBe(narrow);
+});
+
+test.describe("on a phone", () => {
+	test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+	/** Where the card is in the space between the header and the line above the bar. */
+	const place = (page: Page) =>
+		page.evaluate(() => {
+			const box = (selector: string) => document.querySelector(selector)?.getBoundingClientRect();
+			const card = box("[data-card]");
+			const header = box("header");
+			const made = [...document.querySelectorAll("a")]
+				.find((link) => link.getClientRects().length > 0)
+				?.closest("p")
+				?.getBoundingClientRect();
+			if (!card || !header || !made) throw new Error("The page is not laid out");
+			return { above: card.top - header.bottom, below: made.top - card.bottom };
+		});
+
+	test("a card with nothing to press stands in the middle, and one with answers lies on the bar", async ({
+		page,
+	}) => {
+		await start(page);
+		// A part's opening: as much room over it as under it.
+		const opening = await place(page);
+		expect(opening.above).toBeGreaterThan(100);
+		expect(Math.abs(opening.above - opening.below)).toBeLessThanOrEqual(1);
+
+		// A question: on the bar, with all the spare room above it.
+		await forward(page);
+		await expect(heading(page, "How often do you bake bread?")).toBeVisible();
+		const question = await place(page);
+		expect(question.below).toBeLessThanOrEqual(1);
+		expect(question.above).toBeGreaterThan(100);
+
+		// A group's opening and the introduction to its follow-ups stand in the middle too; the
+		// look back, whose lines are pressed, lies on the bar.
+		await skipTo(page, "Nine breads");
+		await forward(page);
+		await choose(page, STOPPED);
+		await skipTo(page, "Your answers: Loaves");
+		expect((await place(page)).below).toBeLessThanOrEqual(1);
+		await forward(page);
+		await expect(heading(page, /You stopped making 1 of these/)).toBeVisible();
+		const intro = await place(page);
+		expect(Math.abs(intro.above - intro.below)).toBeLessThanOrEqual(1);
+		await skipTo(page, "Flatbreads");
+		const group = await place(page);
+		expect(Math.abs(group.above - group.below)).toBeLessThanOrEqual(1);
+		// The bar has not moved: it is at the bottom of the screen on every one of them.
+		const bar = await page
+			.locator("[data-bar]")
+			.evaluate((element) => element.getBoundingClientRect());
+		expect(Math.abs(bar.bottom - 844)).toBeLessThanOrEqual(1);
+	});
 });
 
 test("says whose form it is, on a card with a surface", async ({ page }) => {

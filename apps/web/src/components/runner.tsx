@@ -5,6 +5,7 @@ import {
 	getAnswer,
 	isAnswered,
 	itemOf,
+	mergeItem,
 	placesOf,
 	type ResponseAnswers,
 	withAnswer,
@@ -362,7 +363,8 @@ function Answering({
 			return [
 				{
 					key: candidate.key,
-					label: several ? `${item.label}: ${question.label}` : item.label,
+					// The question as it was asked of this item, with the item's name in it.
+					label: several ? `${item.label}: ${mergeItem(question.label, item)}` : item.label,
 					answer: answerText(question, value, item),
 				},
 			];
@@ -502,8 +504,10 @@ function Answering({
 					</div>
 				)}
 				{/*
-				 * On a phone the card lies at the bottom of the screen, on the bar: what is tapped is
-				 * where the thumb is, and stays there from card to card. At a desk it starts at the top.
+				 * On a phone a card with answers lies at the bottom of the screen, on the bar: what is
+				 * tapped is where the thumb is, and stays there from card to card. A card with nothing
+				 * to press fills the height and stands in its middle (`resting` in card-frame.tsx).
+				 * At a desk every card starts at the top.
 				 */}
 				<main className="flex flex-1 flex-col justify-end sm:justify-start">{shown}</main>
 				{/* Says so when a card moved on by itself, without taking the focus. */}

@@ -20,19 +20,14 @@ function smallTargets(page: Page): Promise<string[]> {
 		const controls = document.querySelectorAll(
 			"button, summary, select, textarea, input[type=text], input[type=email], label:has(input)",
 		);
-		return (
-			[...controls]
-				.filter((control) => control.getClientRects().length > 0)
-				// What a finger cannot press is not a target for one: the marks of a long group, which
-				// are left to the mouse and the keyboard.
-				.filter((control) => getComputedStyle(control).pointerEvents !== "none")
-				.map((control) => ({ control, box: control.getBoundingClientRect() }))
-				.filter(({ box }) => Math.round(box.height) < 44 || Math.round(box.width) < 44)
-				.map(
-					({ control, box }) =>
-						`${control.tagName} "${(control.textContent ?? "").trim().slice(0, 30)}" ${Math.round(box.width)}x${Math.round(box.height)}`,
-				)
-		);
+		return [...controls]
+			.filter((control) => control.getClientRects().length > 0)
+			.map((control) => ({ control, box: control.getBoundingClientRect() }))
+			.filter(({ box }) => Math.round(box.height) < 44 || Math.round(box.width) < 44)
+			.map(
+				({ control, box }) =>
+					`${control.tagName} "${(control.textContent ?? "").trim().slice(0, 30)}" ${Math.round(box.width)}x${Math.round(box.height)}`,
+			);
 	});
 }
 
