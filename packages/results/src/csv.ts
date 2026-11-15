@@ -10,7 +10,7 @@ import {
 	mergeItem,
 	type Question,
 } from "@gateweave/forms-schema";
-import { activeMsOf, type ResponseRecord } from "./records";
+import { activeMsOf, allReached, type ResponseRecord } from "./records";
 
 type Cell = string | number;
 
@@ -179,7 +179,8 @@ const iso = (time: number) => new Date(time).toISOString();
  * The responses as one row each, one column per thing asked. An empty cell means the question
  * was not shown to that person or was left without an answer.
  */
-export function responsesCsv(definition: Definition, records: ResponseRecord[]): string {
+export function responsesCsv(definition: Definition, given: ResponseRecord[]): string {
+	const records = allReached(definition, given);
 	const columns = answerColumns(definition);
 	const rows = records.map((record) => [
 		record.id,

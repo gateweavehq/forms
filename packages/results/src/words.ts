@@ -10,7 +10,7 @@ import {
 	mergeItem,
 	type Question,
 } from "@gateweave/forms-schema";
-import type { ResponseRecord } from "./records";
+import { type ResponseRecord, reached } from "./records";
 
 /** An answer as a person would read it: labels instead of ids. */
 export function inWords(question: Question, value: AnswerValue): string {
@@ -78,7 +78,8 @@ export interface ResponseSection {
  * One response, question by question in the form's order: every question it was shown, with
  * what it answered. Detached answers are not part of a response and cannot appear.
  */
-export function responseLines(definition: Definition, record: ResponseRecord): ResponseSection[] {
+export function responseLines(definition: Definition, given: ResponseRecord): ResponseSection[] {
+	const record = reached(definition, given);
 	const line = (
 		question: Question,
 		label: string,

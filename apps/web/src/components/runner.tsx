@@ -8,6 +8,7 @@ import {
 	mergeItem,
 	placesOf,
 	type ResponseAnswers,
+	reachedAnswers,
 	withAnswer,
 } from "@gateweave/forms-schema";
 import { Link } from "@tanstack/react-router";
@@ -268,7 +269,9 @@ function Answering({
 			clock.current?.take();
 		}
 
-		// The answer just given may open or close cards after this one, never before it.
+		// The answer just given may open or close cards after this one, never before it. What
+		// was answered under a card it closed is taken back, as the server does on saving it.
+		nextAnswers = reachedAnswers(definition, nextAnswers).answers;
 		const nextCards = deckOf(flow(definition, nextAnswers));
 		const here = nextCards.findIndex((candidate) => candidate.key === card.key);
 		const find = (key: string | undefined) =>

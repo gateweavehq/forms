@@ -38,6 +38,7 @@ export {
 	isAsking,
 	itemOf,
 	type QuestionStep,
+	reachedAnswers,
 	type SectionStep,
 	type StatusStep,
 	type Step,

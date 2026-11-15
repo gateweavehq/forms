@@ -211,6 +211,52 @@ describe("the responses", () => {
 	});
 });
 
+describe("an answer that was taken back", () => {
+	// A row the server's own removal did not catch: results must not depend on it having run.
+	// The third response says it has a lot of light and nothing about any plant, so a reason
+	// for giving up on the jade plant is an answer to a question it was never asked.
+	const ESCAPED = "It lost every leaf";
+
+	beforeAll(async () => {
+		await forms.db
+			.prepare(
+				"INSERT INTO answer (response_id, question_id, item_id, value, active_ms, changes, updated_at) VALUES (?, 'why', 'jade', ?, 4000, 0, 1)",
+			)
+			.bind(third.id, JSON.stringify(ESCAPED))
+			.run();
+	});
+
+	it("is on no results page and in no export", async () => {
+		for (const path of ["", "/items", "/questions", "/responses", `/responses/${third.id}`]) {
+			expect(await page(path), path).not.toContain(ESCAPED);
+		}
+		const text = await (await exported("responses")).text();
+		expect(text).not.toContain(ESCAPED);
+		// And its four seconds are not in the response's time: one answer at a second.
+		expect(text.split("\r\n").find((line) => line.startsWith(`${third.id},`))).toMatch(
+			/^[\w-]+,phone,[^,]+Z,,1,bright,/,
+		);
+	});
+
+	it("goes from the server when the answer it hung on is changed, without finishing", async () => {
+		const fourth = await start("tablet");
+		await give(fourth, "kept", { option: "gave-up" }, "aloe");
+		await give(fourth, "why", "Too much water", "aloe");
+		expect(await (await exported("responses")).text()).toContain("Too much water");
+		await give(fourth, "kept", { option: "now" }, "aloe");
+		const left = await forms.db
+			.prepare("SELECT question_id FROM answer WHERE response_id = ? AND item_id = 'aloe'")
+			.bind(fourth.id)
+			.all();
+		expect(left.results).toEqual([{ question_id: "kept" }]);
+		expect(await (await exported("responses")).text()).not.toContain("Too much water");
+		expect(await page("/items")).not.toContain("Too much water");
+		// Later tests count three responses.
+		const removed = await ownerCall("DELETE", `forms/${FORM}/responses/${fourth.id}`);
+		expect(removed.status).toBe(200);
+	});
+});
+
 describe("the exports", () => {
 	it("gives the responses as a file, one row each, with nothing kept apart", async () => {
 		const response = await exported("responses");

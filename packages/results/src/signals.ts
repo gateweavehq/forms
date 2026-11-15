@@ -1,6 +1,6 @@
 import { type Definition, isChoice } from "@gateweave/forms-schema";
 import { median } from "./numbers";
-import { activeMsOf, answersOf, type ResponseRecord } from "./records";
+import { activeMsOf, allReached, answersOf, type ResponseRecord } from "./records";
 
 /** A completed response counts as fast when its active time is under this part of the median. */
 export const FAST_SHARE = 0.3;
@@ -56,7 +56,8 @@ function straightGroups(definition: Definition, record: ResponseRecord): string[
  * What stands out about each response. Give it every response of the version, not a filtered
  * part: "fast" is measured against the median of all that completed.
  */
-export function signals(definition: Definition, records: ResponseRecord[]): Signals {
+export function signals(definition: Definition, given: ResponseRecord[]): Signals {
+	const records = allReached(definition, given);
 	const medianMs = median(records.filter((record) => record.completedAt !== null).map(activeMsOf));
 	return {
 		medianMs,

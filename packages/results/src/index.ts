@@ -17,6 +17,7 @@ export {
 	type Filter,
 	filterQuestions,
 	type ResponseRecord,
+	reached,
 } from "./records";
 export {
 	FAST_SHARE,

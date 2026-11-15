@@ -13,7 +13,7 @@ import {
 	type QuestionType,
 } from "@gateweave/forms-schema";
 import { mean, median } from "./numbers";
-import type { ResponseRecord } from "./records";
+import { allReached, type ResponseRecord } from "./records";
 
 /** One option of a question, with how many chose it and the lines they wrote beside it. */
 export interface OptionCount {
@@ -199,8 +199,9 @@ export interface SectionSummary {
  */
 export function questionSummaries(
 	definition: Definition,
-	records: ResponseRecord[],
+	given: ResponseRecord[],
 ): SectionSummary[] {
+	const records = allReached(definition, given);
 	return definition.sections.flatMap((section) => {
 		if (section.type !== "questions") return [];
 		const questions = section.questions
@@ -242,7 +243,8 @@ function itemAnswers(records: ResponseRecord[], item: Item, question: Question):
 }
 
 /** A repeat section as a table: each item with what was answered about it. */
-export function repeatTables(definition: Definition, records: ResponseRecord[]): RepeatTable[] {
+export function repeatTables(definition: Definition, given: ResponseRecord[]): RepeatTable[] {
+	const records = allReached(definition, given);
 	return definition.sections.flatMap((section) => {
 		if (section.type !== "repeat") return [];
 		const forItem = (item: Item, questions: Question[]) =>

@@ -183,6 +183,42 @@ export function flow(definition: Definition, answers: ResponseAnswers): Step[] {
 }
 
 /**
+ * The answers the flow reaches: those of the questions a person with these answers is asked.
+ * An answer the flow does not reach was taken back with the answer it hung on ("why did you
+ * stop?" under an item the person then said they never made). `unreached` names what was
+ * left out.
+ */
+export function reachedAnswers(
+	definition: Definition,
+	answers: ResponseAnswers,
+): { answers: ResponseAnswers; unreached: Array<{ questionId: string; itemId: string }> } {
+	const asked = new Set(
+		flow(definition, answers)
+			.filter(isAsking)
+			.map((step) => `${itemOf(step) ?? ""} ${step.questionId}`),
+	);
+	const unreached: Array<{ questionId: string; itemId: string }> = [];
+	const questions: ResponseAnswers["questions"] = {};
+	for (const [questionId, answer] of Object.entries(answers.questions)) {
+		if (asked.has(` ${questionId}`)) questions[questionId] = answer;
+		else unreached.push({ questionId, itemId: "" });
+	}
+	const items: ResponseAnswers["items"] = {};
+	for (const [itemId, own] of Object.entries(answers.items)) {
+		const kept: ResponseAnswers["items"][string] = {};
+		for (const [questionId, answer] of Object.entries(own)) {
+			if (asked.has(`${itemId} ${questionId}`)) kept[questionId] = answer;
+			else unreached.push({ questionId, itemId });
+		}
+		if (Object.keys(kept).length > 0) items[itemId] = kept;
+	}
+	return {
+		answers: unreached.length === 0 ? answers : { ...answers, questions, items },
+		unreached,
+	};
+}
+
+/**
  * The asking steps whose question needs an answer and does not have a whole one (`missingFrom`
  * says what a whole one is). A response can be completed when this is empty.
  */

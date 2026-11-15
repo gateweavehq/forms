@@ -8,7 +8,7 @@ import {
 	placesOf,
 } from "@gateweave/forms-schema";
 import { median, share } from "./numbers";
-import { activeMsOf, DEVICES, type Device, type ResponseRecord } from "./records";
+import { activeMsOf, allReached, DEVICES, type Device, type ResponseRecord } from "./records";
 
 /** A place in a form where a response can have stopped: a section, or a group of a repeat section. */
 export interface StoppingPlace {
@@ -57,7 +57,8 @@ function lastStep(definition: Definition, record: ResponseRecord) {
 	);
 }
 
-export function overview(definition: Definition, records: ResponseRecord[]): Overview {
+export function overview(definition: Definition, given: ResponseRecord[]): Overview {
+	const records = allReached(definition, given);
 	const completed = records.filter((record) => record.completedAt !== null);
 	const open = records.filter((record) => record.completedAt === null);
 	const places = placesOf(definition);
