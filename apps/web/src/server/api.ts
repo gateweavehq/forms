@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
+import { readCapped, TooLarge } from "./body";
 import { createDb } from "./db";
 import { findForm } from "./forms";
 import {
@@ -13,7 +14,7 @@ import {
 	saveProgress,
 } from "./responses";
 
-/** The largest body a respondent's request may have. A long text answer is a few kilobytes. */
+/** The most bytes a respondent's request may have. A long text answer is a few kilobytes. */
 const MAX_BODY = 64_000;
 
 /** The longest a single visit to a question is believed to have lasted: a day. */
@@ -55,8 +56,15 @@ async function readBody<Shape>(request: Request, schema: z.ZodType<Shape>): Prom
 	if (!request.headers.get("Content-Type")?.startsWith("application/json")) {
 		throw new Refusal(415, "Send JSON.");
 	}
-	const text = await request.text();
-	if (text.length > MAX_BODY) throw new Refusal(413, "This is more than a form's answer can be.");
+	let text: string;
+	try {
+		text = await readCapped(request, MAX_BODY);
+	} catch (error) {
+		if (error instanceof TooLarge) {
+			throw new Refusal(413, "This is more than a form's answer can be.");
+		}
+		throw error;
+	}
 	let data: unknown;
 	try {
 		data = JSON.parse(text);
