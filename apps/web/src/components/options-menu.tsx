@@ -1,3 +1,4 @@
+import type { Withdrawal } from "@gateweave/forms-schema";
 import { useEffect, useId, useRef, useState } from "react";
 import { cn } from "#/lib/cn";
 import { strings } from "#/lib/strings";
@@ -24,6 +25,7 @@ export function OptionsMenu({
 	secret,
 	version,
 	hasConsent,
+	withdrawal,
 	onWithdrawn,
 }: {
 	/** The switch for moving on by itself. Absent in a form that has no cards that do. */
@@ -34,6 +36,8 @@ export function OptionsMenu({
 	/** Names the wording the response began under, for the copy of its consent. */
 	version: string;
 	hasConsent: boolean;
+	/** Until when the form lets a person take their answers back, as it was when they began. */
+	withdrawal: Withdrawal;
 	onWithdrawn: () => void;
 }) {
 	const [open, setOpen] = useState(false);
@@ -147,6 +151,7 @@ export function OptionsMenu({
 				secret={secret}
 				version={version}
 				hasConsent={hasConsent}
+				withdrawal={withdrawal}
 				onWithdrawn={onWithdrawn}
 				onClose={() => button.current?.focus()}
 			/>

@@ -130,6 +130,20 @@ async function respondentsOwn(page: Page, check: () => Promise<void>): Promise<v
 	await expect(page.getByRole("button", { name: "Print or save as PDF" })).toBeEnabled();
 	await check();
 
+	// What is stored, on a page of its own.
+	await page.goto(`${FORM}/stored`);
+	await expect(page.getByRole("button", { name: "Print or save as PDF" })).toBeEnabled();
+	await check();
+
+	// The end page asking whether to take the answers back, and the notice after it.
+	await start(page);
+	await skipTo(page, "Thank you");
+	await page.getByRole("button", { name: "Take my answers back" }).click();
+	await check();
+	await page.getByRole("button", { name: "Yes, delete my answers" }).click();
+	await expect(page.getByRole("heading", { name: "Your answers were deleted" })).toBeVisible();
+	await check();
+
 	// The options in the header, with the entry for one's own answers, and its dialog.
 	await start(page);
 	await page.getByRole("button", { name: "Options" }).click();
@@ -174,6 +188,12 @@ async function ownersPages(
 	await respond(browser, id, "Very little", { finish: false });
 
 	await page.getByRole("button", { name: "Close it" }).click();
+	await expect(page.getByRole("dialog")).toBeVisible();
+	await check();
+	await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+
+	// Deleting the form asks for its id, which is long on a narrow screen.
+	await page.getByRole("button", { name: "Delete this form" }).click();
 	await expect(page.getByRole("dialog")).toBeVisible();
 	await check();
 	await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();

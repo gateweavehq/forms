@@ -16,12 +16,14 @@ import {
 	referencedQuestions,
 	unansweredRequired,
 	withAnswer,
+	withdrawalOf,
 } from "@gateweave/forms-schema";
 import { and, eq, isNull } from "drizzle-orm";
-import type { Database } from "./db";
+import { type Database, runBatch } from "./db";
 import { answer, definition as definitions, detachedAnswer, response } from "./db/schema";
 import type { Form } from "./forms";
 import { randomToken, sealSecret, secretMatches } from "./secret";
+import { keepApartStatement, startStatements, withdrawStatements } from "./statements";
 
 export type Device = "phone" | "tablet" | "desk";
 
@@ -61,23 +63,43 @@ export async function createResponse(
 	const secret = randomToken(32);
 	const now = Date.now();
 	const formId = form.definition.id;
-	await db.batch([
-		// Kept once per content. A form that has not changed adds nothing here.
-		db
-			.insert(definitions)
-			.values({ hash: form.hash, formId, json: JSON.stringify(form.definition) })
-			.onConflictDoNothing(),
-		db.insert(response).values({
+	const json = JSON.stringify(form.definition);
+	const seal = await sealSecret(id, secret);
+	if (form.ownerId === null) {
+		// An example served from its file: there is no row whose state could have changed.
+		await db.batch([
+			// Kept once per content. A form that has not changed adds nothing here.
+			db.insert(definitions).values({ hash: form.hash, formId, json }).onConflictDoNothing(),
+			db.insert(response).values({
+				id,
+				formId,
+				definitionHash: form.hash,
+				answersVersion: ANSWERS_VERSION,
+				secretSeal: seal,
+				device,
+				createdAt: now,
+				updatedAt: now,
+			}),
+		]);
+		return { id, secret };
+	}
+	// "Still open" is asked again by the statements themselves. The form was read a moment ago,
+	// and its owner can close or delete it in between: a response written after its form was
+	// deleted would lie under an id nobody owns, where no one could find or delete it.
+	const changed = await runBatch(
+		db.$client,
+		startStatements({
 			id,
 			formId,
-			definitionHash: form.hash,
+			hash: form.hash,
+			json,
 			answersVersion: ANSWERS_VERSION,
-			secretSeal: await sealSecret(id, secret),
+			seal,
 			device,
-			createdAt: now,
-			updatedAt: now,
+			now,
 		}),
-	]);
+	);
+	if (!changed.at(-1)) throw new Refusal(404, "There is no such form.");
 	return { id, secret };
 }
 
@@ -340,21 +362,54 @@ export async function completeResponse(
 }
 
 /**
- * Deletes a response that is not complete, with its answers: the person takes back what they
- * gave. A completed one is the study's from then on, and only whoever runs the form removes it.
+ * Whether the person who holds a response's secret may take it back now. One that is not
+ * complete, always. A complete one, when the definition it began under says "until the form
+ * closes" and the form takes answers today: closing is when a study starts counting, and what
+ * it has counted should not change under it. A response whose form is gone has nobody to ask.
  */
-export async function withdrawResponse(db: Database, row: ResponseRow): Promise<void> {
-	const refusal = new Refusal(
-		409,
-		"This response is complete, so it cannot be withdrawn here. Ask whoever sent you the form to delete it.",
+export function mayWithdraw(
+	definition: Definition,
+	form: Pick<Form, "state"> | undefined,
+	completed: boolean,
+): boolean {
+	if (!completed) return true;
+	return withdrawalOf(definition) === "until-closed" && form?.state === "open";
+}
+
+/** What became of a request to withdraw: done, or why not. */
+export type Withdrawn = "withdrawn" | "complete" | "closed";
+
+/**
+ * Deletes a response with its answers, which is all there is of it: the times a question was
+ * on screen are columns of the answers, and when it was begun and finished are columns of the
+ * response. The person takes back what they gave. What the form kept apart stays: such a row
+ * names no response, so there is nothing to find it by.
+ *
+ * The only trace is a count on the definition the response began under, one higher, so that
+ * whoever runs the study can say how many withdrew. It says neither which nor when.
+ *
+ * `definition` is the one the response began under, and `form` the form as it is today.
+ */
+export async function withdrawResponse(
+	db: Database,
+	definition: Definition,
+	row: ResponseRow,
+	form: Pick<Form, "state"> | undefined,
+): Promise<Withdrawn> {
+	const afterCompletion = mayWithdraw(definition, form, true);
+	// Everything read above was read a moment ago. A request that completes the response, or
+	// one that closes the form, can arrive in between, so each statement asks again, and all of
+	// them ask the same thing: they change something together or not at all.
+	const changed = await runBatch(
+		db.$client,
+		withdrawStatements({
+			responseId: row.id,
+			definitionHash: row.definitionHash,
+			afterCompletion,
+		}),
 	);
-	if (row.completedAt !== null) throw refusal;
-	// "Still open" is asked again by the statement itself: a request that completes the response
-	// can arrive between the check above and this. The answers go with their response.
-	const removed = await db
-		.delete(response)
-		.where(and(eq(response.id, row.id), isNull(response.completedAt)));
-	if (removed.meta.changes === 0) throw refusal;
+	if (changed.at(-1)) return "withdrawn";
+	return withdrawalOf(definition) === "until-complete" ? "complete" : "closed";
 }
 
 /** A random key for a row whose order of arrival must not be stored. Fits a JavaScript number. */
@@ -393,9 +448,13 @@ export async function saveDetached(
 		if (isAnswered(value)) kept[question.id] = value;
 	}
 	if (Object.keys(kept).length === 0) throw new Refusal(400, "There is nothing to store.");
-	await db.insert(detachedAnswer).values({
-		id: randomRowId(),
-		formId: form.definition.id,
-		answers: stableJson(kept),
-	});
+	const row = { id: randomRowId(), formId: form.definition.id, answers: stableJson(kept) };
+	if (form.ownerId === null) {
+		await db.insert(detachedAnswer).values(row);
+		return;
+	}
+	// Only while the form is open, asked by the statement: one closed or deleted since it was
+	// read takes no more rows. A row under a deleted form's id would be nobody's to delete.
+	const [stored] = await runBatch(db.$client, [keepApartStatement(row)]);
+	if (!stored) throw new Refusal(404, "There is no such form.");
 }

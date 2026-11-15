@@ -236,6 +236,9 @@ function Outline({ result }: { result: Extract<Preview, { ok: true }> }) {
 				<p className="text-sm text-muted-foreground">
 					{t.address(summary.id)} · {summary.hasConsent ? t.withConsent : t.withoutConsent}
 				</p>
+				<p className="text-sm text-muted-foreground break-words">
+					{summary.controller ? t.runBy(summary.controller.name) : t.noController}
+				</p>
 			</div>
 			<ol className="flex list-decimal flex-col gap-1 pl-5">
 				{summary.sections.map((section) => (

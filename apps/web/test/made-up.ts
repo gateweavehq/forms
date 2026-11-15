@@ -7,6 +7,7 @@ export function plantForm(id = "house-plants", title = "Plants at home") {
 		version: 1,
 		id,
 		title,
+		controller: { name: "Made-up Plant Study", contact: "plant-study@example.org" },
 		sections: [
 			{
 				type: "questions",

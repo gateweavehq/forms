@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { bakingForm } from "../../../packages/tally-import/test/baking-form";
+import { replaceDefinitionStatements, type Statement } from "../src/server/statements";
 import { as, signUp } from "./accounts";
 import { type Forms, startForms } from "./forms-worker";
 import { plantForm } from "./made-up";
@@ -150,27 +151,31 @@ describe("bringing a form in", () => {
 	it("refuses a rule nested without end, and never with a fault of its own", async () => {
 		const cookie = await signUp(forms);
 		const id = freshId();
-		let rule: unknown = { question: "light", is: "bright" };
-		for (let level = 0; level < 20_000; level++) rule = { not: rule };
-		const deep = plantForm(id) as { sections: Array<{ questions?: Array<{ showIf?: unknown }> }> };
-		const second = deep.sections[0]?.questions?.[1];
+		// The rule is written out as text, not built and passed to JSON.stringify: 20,000 levels
+		// run this process out of stack on some machines, and the stack under test is the server's.
+		const levels = 20_000;
+		const rule = `${'{"not":'.repeat(levels)}{"question":"light","is":"bright"}${"}".repeat(levels)}`;
+		const form = plantForm(id) as { sections: Array<{ questions?: Array<{ showIf?: unknown }> }> };
+		const second = form.sections[0]?.questions?.[1];
 		if (!second) throw new Error("The form has no second question");
-		second.showIf = rule;
+		second.showIf = "THE RULE";
+		const deep = JSON.stringify(form).replace('"THE RULE"', rule);
+		expect(deep).toContain(rule);
 
-		const previewed = await call(cookie, "POST", "preview", {
-			kind: "definition",
-			text: JSON.stringify(deep),
-		});
+		const previewed = await call(cookie, "POST", "preview", { kind: "definition", text: deep });
 		expect(previewed.status).toBe(200);
 		const result = (await previewed.json()) as { ok: boolean; problems: string[] };
 		expect(result.ok).toBe(false);
 		expect(result.problems.join()).toContain("nested more than 32 levels");
 
-		const created = await call(cookie, "POST", "forms", { definition: deep });
+		const created = await forms.fetch(
+			"/api/owner/forms",
+			as(cookie, { method: "POST", body: `{"definition":${deep}}` }),
+		);
 		expect(created.status).toBe(400);
 		const asTally = await call(cookie, "POST", "preview", {
 			kind: "tally",
-			text: JSON.stringify({ blocks: [{ payload: rule }] }),
+			text: `{"blocks":[{"payload":${rule}}]}`,
 		});
 		expect(asTally.status).toBe(200);
 		expect(await asTally.json()).toMatchObject({ ok: false });
@@ -281,6 +286,121 @@ describe("a form's state", () => {
 	});
 });
 
+describe("who runs a form", () => {
+	/** The made-up form as an import leaves it: without the line that says who runs it. */
+	function unsigned(id: string) {
+		const { controller: _controller, ...rest } = plantForm(id);
+		return rest;
+	}
+
+	async function ownerWithUnsigned() {
+		const cookie = await signUp(forms);
+		const id = freshId();
+		const created = await call(cookie, "POST", "forms", { definition: unsigned(id) });
+		expect(created.status).toBe(201);
+		return { cookie, id };
+	}
+
+	it("can be left out of a draft, which then cannot be opened, and says what is missing", async () => {
+		const { cookie, id } = await ownerWithUnsigned();
+		expect(await formRow(id)).toMatchObject({ state: "draft" });
+
+		const opened = await call(cookie, "POST", `forms/${id}/state`, { state: "open" });
+		expect(opened.status).toBe(409);
+		expect(JSON.stringify(await opened.json())).toContain("does not say who runs it");
+		expect(await formRow(id)).toMatchObject({ state: "draft" });
+		expect((await start(id)).status).toBe(404);
+
+		const settings = await (await forms.fetch(`/forms/${id}/settings`, as(cookie))).text();
+		expect(settings).toContain("Missing: this form does not say who runs it yet.");
+	});
+
+	it("can be filled in on the settings page, as a new version, after which the form opens", async () => {
+		const { cookie, id } = await ownerWithUnsigned();
+		const before = (await formRow(id)) as { definition_hash: string };
+		const saved = await call(cookie, "POST", `forms/${id}/controller`, {
+			name: "  Made-up Fern Society ",
+			contact: "ferns@example.test",
+		});
+		expect(saved.status).toBe(200);
+		const after = (await formRow(id)) as { definition_hash: string };
+		expect(after.definition_hash).not.toBe(before.definition_hash);
+		const stored = await forms.db
+			.prepare("SELECT json FROM definition WHERE hash = ?")
+			.bind(after.definition_hash)
+			.first<{ json: string }>();
+		// Nothing else of the definition changed.
+		expect(JSON.parse(stored?.json ?? "{}")).toEqual({
+			...unsigned(id),
+			controller: { name: "Made-up Fern Society", contact: "ferns@example.test" },
+		});
+
+		const settings = await (await forms.fetch(`/forms/${id}/settings`, as(cookie))).text();
+		expect(settings).not.toContain("Missing: this form does not say who runs it yet.");
+		expect(settings).toContain('value="Made-up Fern Society"');
+		expect((await call(cookie, "POST", `forms/${id}/state`, { state: "open" })).status).toBe(200);
+		expect(await (await forms.fetch(`/f/${id}`)).text()).toContain("Made-up Fern Society");
+	});
+
+	it("refuses a line that names nobody or gives no way to reach them", async () => {
+		const { cookie, id } = await ownerWithUnsigned();
+		const before = await formRow(id);
+		for (const body of [
+			{ name: "", contact: "ferns@example.test" },
+			{ name: "Made-up Fern Society", contact: "   " },
+			{ name: "Made-up Fern Society" },
+			{ name: "x".repeat(201), contact: "ferns@example.test" },
+		]) {
+			expect((await call(cookie, "POST", `forms/${id}/controller`, body)).status).toBe(400);
+		}
+		expect(await formRow(id)).toEqual(before);
+	});
+
+	it("cannot be taken out of a form that is open", async () => {
+		const { cookie, id } = await ownerWithForm();
+		const before = await formRow(id);
+		const replaced = await call(cookie, "POST", `forms/${id}/definition`, {
+			definition: unsigned(id),
+		});
+		expect(replaced.status).toBe(409);
+		expect(await formRow(id)).toEqual(before);
+
+		// A closed form can lose it, and then cannot be opened again until it is back.
+		await call(cookie, "POST", `forms/${id}/state`, { state: "closed" });
+		expect(
+			(await call(cookie, "POST", `forms/${id}/definition`, { definition: unsigned(id) })).status,
+		).toBe(200);
+		expect((await call(cookie, "POST", `forms/${id}/state`, { state: "open" })).status).toBe(409);
+		expect(await formRow(id)).toMatchObject({ state: "closed" });
+	});
+
+	it("is said before a form is brought in", async () => {
+		const cookie = await signUp(forms);
+		const preview = async (definition: unknown) =>
+			(await (
+				await call(cookie, "POST", "preview", {
+					kind: "definition",
+					text: JSON.stringify(definition),
+				})
+			).json()) as { summary: { controller: unknown; withdrawal: string } };
+		expect((await preview(plantForm(freshId()))).summary).toMatchObject({
+			controller: { name: "Made-up Plant Study", contact: "plant-study@example.org" },
+			withdrawal: "until-closed",
+		});
+		expect((await preview(unsigned(freshId()))).summary.controller).toBeNull();
+		// A Tally form's page has no such line: the import still works, and comes in as a draft.
+		const tally = (await (
+			await call(cookie, "POST", "preview", {
+				kind: "tally",
+				text: JSON.stringify(bakingForm()),
+				id: freshId(),
+			})
+		).json()) as { ok: boolean; summary: { controller: unknown } };
+		expect(tally.ok).toBe(true);
+		expect(tally.summary.controller).toBeNull();
+	});
+});
+
 describe("a new definition", () => {
 	it("is what new responses start under, while one already begun keeps its own", async () => {
 		const { cookie, id } = await ownerWithForm();
@@ -315,6 +435,90 @@ describe("a new definition", () => {
 		});
 		expect(response.status).toBe(400);
 		expect(await formRow("another-id")).toBeNull();
+	});
+});
+
+describe("a new definition that arrives after the form has changed", () => {
+	// The other request first, which two real requests cannot be made to do on purpose: the
+	// statements are built as the server builds them from the form it read, and run afterwards.
+	async function run(statements: Statement[]): Promise<number[]> {
+		const results = await forms.db.batch(
+			statements.map(({ sql, params }) => forms.db.prepare(sql).bind(...params)),
+		);
+		return results.map((result: { meta: { changes?: number } }) => result.meta.changes ?? 0);
+	}
+
+	async function replaceOf(id: string, title: string, hasController: boolean) {
+		const row = (await formRow(id)) as { owner_id: string };
+		return replaceDefinitionStatements({
+			formId: id,
+			ownerId: row.owner_id,
+			hash: `hash-of-${title}`,
+			json: JSON.stringify(plantForm(id, title)),
+			title,
+			hasController,
+			now: 1,
+		});
+	}
+
+	const versions = async (id: string) =>
+		(
+			await forms.db
+				.prepare("SELECT count(*) AS n FROM definition WHERE form_id = ?")
+				.bind(id)
+				.first<{ n: number }>()
+		)?.n ?? -1;
+
+	it("leaves nothing under the id of a form that was deleted in between", async () => {
+		const { cookie, id } = await ownerWithForm();
+		const statements = await replaceOf(id, "Written too late", true);
+		expect((await call(cookie, "DELETE", `forms/${id}`, { confirm: id })).status).toBe(200);
+
+		expect(await run(statements)).toEqual([0, 0]);
+		expect(await versions(id)).toBe(0);
+		expect(await formRow(id)).toBeNull();
+
+		// And nothing for the account that uses the id next to be shown as a version of theirs.
+		expect((await call(cookie, "POST", "forms", { definition: plantForm(id) })).status).toBe(201);
+		const settings = await (await forms.fetch(`/forms/${id}/settings`, as(cookie))).text();
+		expect(new Set(settings.match(/Version [0-9a-f]{8}/g)).size).toBe(1);
+		expect(settings).not.toContain("Written too late");
+	});
+
+	it("leaves no version behind when a form was opened in between and the definition names nobody", async () => {
+		const { cookie, id } = await ownerWithForm("draft");
+		const before = await formRow(id);
+		// Decided while the form was a draft, which may be given a definition without a controller.
+		const statements = await replaceOf(id, "Names nobody", false);
+		expect((await call(cookie, "POST", `forms/${id}/state`, { state: "open" })).status).toBe(200);
+
+		expect(await run(statements)).toEqual([0, 0]);
+		expect(await versions(id)).toBe(1);
+		expect(await formRow(id)).toMatchObject({
+			title: "Plants at home",
+			definition_hash: (before as { definition_hash: string }).definition_hash,
+		});
+
+		// The same statements for a definition that names someone go through on an open form.
+		expect(await run(await replaceOf(id, "Names someone", true))).toEqual([1, 1]);
+		expect(await versions(id)).toBe(2);
+		expect(await formRow(id)).toMatchObject({ title: "Names someone" });
+	});
+
+	it("changes nothing for a form that is another account's by now", async () => {
+		const { id } = await ownerWithForm();
+		const statements = replaceDefinitionStatements({
+			formId: id,
+			ownerId: "an-account-that-had-the-id-before",
+			hash: "hash-of-someone-elses",
+			json: JSON.stringify(plantForm(id, "Someone else's")),
+			title: "Someone else's",
+			hasController: true,
+			now: 1,
+		});
+		expect(await run(statements)).toEqual([0, 0]);
+		expect(await versions(id)).toBe(1);
+		expect(await formRow(id)).toMatchObject({ title: "Plants at home" });
 	});
 });
 

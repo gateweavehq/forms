@@ -2,6 +2,10 @@
 	"version": 1,
 	"id": "home-baking",
 	"title": "Bread at home",
+	"controller": {
+		"name": "Made-up Bread Study, Example Institute",
+		"contact": "bread-study@example.org"
+	},
 	"consent": {
 		"title": "Before you start",
 		"text": [

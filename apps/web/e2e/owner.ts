@@ -1,7 +1,7 @@
 import type { Browser, Locator, Page, TestInfo } from "@playwright/test";
 import { plantForm } from "../test/made-up";
 import { expect } from "./fixtures";
-import { choose, forward, heading, skipTo } from "./helpers";
+import { choose, forward, heading, skipTo, stored } from "./helpers";
 
 /** An id no other test or project uses: they share one server and one database. */
 export function freshId(info: TestInfo): string {
@@ -60,5 +60,8 @@ export async function respond(
 	await forward(page);
 	await expect(heading(page, "How many plants do you have?")).toBeVisible();
 	if (finish) await skipTo(page, "Thank you");
+	// An answer is sent after the next card is shown. Closing the browser before it has
+	// arrived would drop it, and the owner's pages would count a response that answered nothing.
+	await expect.poll(async () => (await stored(page)).answers.questions.light?.value).toBeTruthy();
 	await context.close();
 }

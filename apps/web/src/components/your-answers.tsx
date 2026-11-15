@@ -1,3 +1,4 @@
+import type { Withdrawal } from "@gateweave/forms-schema";
 import { useNavigate } from "@tanstack/react-router";
 import { type Ref, useId, useImperativeHandle, useRef, useState } from "react";
 import { withdrawResponse } from "#/lib/client";
@@ -31,6 +32,7 @@ export function YourAnswers({
 	secret,
 	version,
 	hasConsent,
+	withdrawal,
 	onWithdrawn,
 	onClose,
 }: {
@@ -41,6 +43,7 @@ export function YourAnswers({
 	/** Names the wording the response began under. */
 	version: string;
 	hasConsent: boolean;
+	withdrawal: Withdrawal;
 	onWithdrawn: () => void;
 	/** Called when the dialog has closed, to put the focus back where it came from. */
 	onClose?: () => void;
@@ -109,7 +112,7 @@ export function YourAnswers({
 				</section>
 				<section className="flex flex-col gap-2">
 					<h3 className="font-medium">{t.withdrawTitle}</h3>
-					<p className="text-sm text-muted-foreground">{t.withdrawBody}</p>
+					<p className="text-sm text-muted-foreground">{t.withdrawBody[withdrawal]}</p>
 					{asking ? (
 						<div className="flex flex-wrap items-center gap-2">
 							<p className="w-full font-medium">{t.withdrawSure}</p>

@@ -182,6 +182,27 @@ export const endSchema = z.strictObject({
 });
 
 /**
+ * Who runs the study and decides what its answers are used for: the one a person answering can
+ * turn to. Shown on the first page, so both lines are short.
+ */
+export const controllerSchema = z.strictObject({
+	/** A person or an organisation, as they would sign a letter. */
+	name: z.string().trim().min(1).max(200),
+	/** A way to reach them that a stranger can use: an email address, a page, a postal address. */
+	contact: z.string().trim().min(1).max(300),
+});
+
+/**
+ * Until when a person can take their answers back themselves, with the address they answered
+ * from. `until-closed`: also after finishing, for as long as the form takes answers.
+ * `until-complete`: only before finishing; afterwards they have to ask whoever runs the study.
+ */
+export const withdrawalSchema = z.enum(["until-closed", "until-complete"]);
+
+/** What a definition that does not say gets: the rule that leaves the person more. */
+export const DEFAULT_WITHDRAWAL = "until-closed" satisfies z.infer<typeof withdrawalSchema>;
+
+/**
  * A form: ordered sections, which the person answering sees as legs. This checks shapes only;
  * `parseDefinition` also checks that ids are unique and that rules point at real, earlier
  * questions.
@@ -191,11 +212,28 @@ export const definitionSchema = z.strictObject({
 	/** Names the form in its address, `/f/<id>`. */
 	id: idSchema,
 	title: label,
+	/**
+	 * Optional here, so that a draft and an import can exist without one. A form cannot be
+	 * opened for answers until it has one: the app refuses, not this shape.
+	 */
+	controller: controllerSchema.optional(),
+	/**
+	 * Left out, it is `until-closed`. Not filled in on parsing: a stored definition is named by
+	 * a hash of its content, which a default written into it would change. Read it with
+	 * `withdrawalOf`. It is part of the definition because the first page states it, and a
+	 * response keeps the definition it began under: what a person was told is what holds.
+	 */
+	withdrawal: withdrawalSchema.optional(),
 	/** Shown before any question, when the form has one. Nothing is stored until it is given. */
 	consent: consentSchema.optional(),
 	sections: z.array(sectionSchema).min(1),
 	end: endSchema.optional(),
 });
+
+/** Until when a response to this definition can be taken back by the person who gave it. */
+export function withdrawalOf(definition: { withdrawal?: Withdrawal | undefined }): Withdrawal {
+	return definition.withdrawal ?? DEFAULT_WITHDRAWAL;
+}
 
 export type Option = z.infer<typeof optionSchema>;
 export type Question = z.infer<typeof questionSchema>;
@@ -207,6 +245,8 @@ export type QuestionsSection = z.infer<typeof questionsSectionSchema>;
 export type RepeatSection = z.infer<typeof repeatSectionSchema>;
 export type Section = z.infer<typeof sectionSchema>;
 export type Consent = z.infer<typeof consentSchema>;
+export type Controller = z.infer<typeof controllerSchema>;
+export type Withdrawal = z.infer<typeof withdrawalSchema>;
 export type Definition = z.infer<typeof definitionSchema>;
 /** A definition as written, before defaults are filled in. */
 export type DefinitionInput = z.input<typeof definitionSchema>;

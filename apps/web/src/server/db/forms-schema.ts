@@ -15,6 +15,12 @@ export const definition = sqliteTable(
 		formId: text("form_id").notNull(),
 		/** The definition, as JSON. */
 		json: text("json").notNull(),
+		/**
+		 * How many responses to this definition were taken back by the people who gave them.
+		 * A number and nothing else: which response, and when, is what withdrawing removes. It
+		 * goes up in the statement batch that deletes the response.
+		 */
+		withdrawn: integer("withdrawn").notNull().default(0),
 	},
 	(table) => [index("definition_form_idx").on(table.formId)],
 );
@@ -122,3 +128,17 @@ export const detachedAnswer = sqliteTable(
 	},
 	(table) => [index("detached_answer_form_idx").on(table.formId)],
 );
+
+/**
+ * The id of a form that was deleted, and the account that had it. Nothing else of the form is
+ * kept. An id is a form's address, and old links to it are still out there: an invitation, a
+ * copy of a consent. So a deleted form's id can be used again by the account it belonged to
+ * and by nobody else, or such a link would open another person's form.
+ *
+ * `owner_id` does not refer to `user` on purpose: when the account is deleted the row stays,
+ * naming an account that is no more, and the id is retired for good.
+ */
+export const retiredFormId = sqliteTable("retired_form_id", {
+	formId: text("form_id").primaryKey(),
+	ownerId: text("owner_id").notNull(),
+});

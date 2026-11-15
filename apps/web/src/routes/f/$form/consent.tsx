@@ -1,5 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { z } from "zod";
+import { AboutForm } from "#/components/about-form";
 import { LiveButton } from "#/components/live-button";
 import { Notice } from "#/components/notice";
 import { RichTextView } from "#/components/rich-text";
@@ -24,8 +25,9 @@ export const Route = createFileRoute("/f/$form/consent")({
 });
 
 function ConsentCopy() {
-	const { title, consent } = Route.useLoaderData();
+	const { title, consent, controller, withdrawal } = Route.useLoaderData();
 	const { form } = Route.useParams();
+	const { v } = Route.useSearch();
 	const back = (
 		<Link to="/f/$form" params={{ form }} className="font-medium underline underline-offset-4">
 			{t.back}
@@ -52,6 +54,13 @@ function ConsentCopy() {
 				<p className="text-sm text-muted-foreground">{t.statement}</p>
 				<p className="font-medium break-words">{consent.statement}</p>
 			</section>
+			{/* What the first page said beside the consent belongs to what was agreed to. */}
+			<AboutForm
+				formId={form}
+				controller={controller ?? undefined}
+				withdrawal={withdrawal}
+				{...(v ? { version: v } : {})}
+			/>
 			{/* What is on paper needs no buttons. */}
 			<div className="flex flex-wrap items-center gap-4 print:hidden">
 				<LiveButton onClick={() => window.print()}>{t.print}</LiveButton>

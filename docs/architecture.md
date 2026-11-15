@@ -10,7 +10,7 @@ A form is a JSON document, checked with zod. Everything else reads it: the pages
 validation, the importer's output.
 
 ```
-form     { version, id, title, consent?, sections[], end? }
+form     { version, id, title, controller?, withdrawal?, consent?, sections[], end? }
 section  { type: "questions", id, title, text?, minutes?, questions[] }
        | { type: "repeat", id, title, text?, minutes?, groups[], block }
 group    { id, title, items[] }
@@ -42,6 +42,17 @@ question { id, type, label, description?, detail?, required?, showIf?, detached?
   that names it. Rules may not cross that line in either direction.
 - **Ids are unique across the form** (questions, items, groups), because answers are stored under
   them. Text is data (paragraphs of spans with bold, italic and links), never HTML.
+- **`controller`** is who runs the study: a name and a way to reach them. The shape lets it be
+  missing, so that a draft, an older definition and a Tally import are all valid; the app
+  refuses to open a form for answers without one (`notOpenable` in `server/owner.ts`), and a
+  form's Settings page can add it.
+- **`withdrawal`** is until when a person can take their answers back themselves:
+  `"until-closed"` (also after finishing, for as long as the form is open) or
+  `"until-complete"`. Left out, it is `"until-closed"`, and it is not filled in on parsing: a
+  stored definition is named by a hash of its content. Read it with `withdrawalOf`. It lives
+  in the definition, not beside the form, because the first page states it and a response
+  keeps the definition it began under: what a person was told is what holds for them, whatever
+  the form says later.
 
 `parseDefinition` checks the shape and then what a shape cannot say: ids used twice, rules that
 point at nothing, at themselves, forward, into another section's block or across the detached
@@ -100,14 +111,20 @@ The report says what the source held, what each section became and what was chan
 | `/f/<form>`                       | The form's title and consent. Starting makes the response       |
 | `/f/<form>/r/<response>#<secret>` | The cards. Opening this address anywhere continues the response |
 | `/f/<form>/consent`               | The consent text on its own, to print or keep                   |
+| `/f/<form>/stored`                | What the server stores when someone answers, in plain words     |
 | `/login`, `/account`              | Signing in and up, and the account                              |
 | `/forms`, `/forms/new`            | A person's forms, and bringing one in                           |
 | `/forms/<form>`                   | Its results: overview, items, questions, responses, kept apart  |
-| `/forms/<form>/settings`          | Opening and closing, versions, a new definition, deleting       |
+| `/forms/<form>/settings`          | Opening and closing, who runs it, versions, deleting            |
+
+The consent and the "what is stored" page take `?v=<hash>` for the wording a response began
+under. A hash the form never had is not found: showing the current wording in its place would
+pass one text off as another.
 
 A form is a row in `form` that belongs to one account. Its id is what its address carries, so
 it never changes; its wording changes by pointing at a newer definition. An id is free only
-when no form has it and nothing was ever answered under it: responses can outlive their form,
+when no form has it, nothing was ever answered under it, and it is not the retired id of a
+form someone else deleted: responses can outlive their form,
 and whoever took the id next would otherwise be shown them. It is a `draft` (its
 link says it is not open), `open`, or `closed` (no new responses; those begun can finish).
 
@@ -116,17 +133,21 @@ the tests set. On a deployment a form exists because someone brought it in.
 
 ### API
 
-| Request                             | Does                                                        |
-| ----------------------------------- | ----------------------------------------------------------- |
-| `POST /api/forms/<form>/responses`  | Starts a response. Returns its id and secret, once          |
-| `GET /api/responses/<id>`           | The answers so far, the position, whether it is complete    |
-| `POST /api/responses/<id>/progress` | Stores one answer as it is given, and the new position      |
-| `POST /api/responses/<id>/complete` | Closes the response. Refused while a required one is empty  |
-| `DELETE /api/responses/<id>`        | Withdraws a response that is not complete, with its answers |
-| `POST /api/forms/<form>/detached`   | Stores the answers a form keeps apart                       |
+| Request                             | Does                                                       |
+| ----------------------------------- | ---------------------------------------------------------- |
+| `POST /api/forms/<form>/responses`  | Starts a response. Returns its id and secret, once         |
+| `GET /api/responses/<id>`           | The answers so far, the position, whether it is complete   |
+| `POST /api/responses/<id>/progress` | Stores one answer as it is given, and the new position     |
+| `POST /api/responses/<id>/complete` | Closes the response. Refused while a required one is empty |
+| `DELETE /api/responses/<id>`        | Withdraws a response, with its answers (see below)         |
+| `POST /api/forms/<form>/detached`   | Stores the answers a form keeps apart                      |
 
 The four under `/api/responses` need `Authorization: Bearer <secret>`. A wrong secret and an
 unknown id get the same 404. Bodies are JSON, checked with zod, at most 64 KB.
+
+`GET /api/responses/<id>` and the answer to completing say `canWithdraw`: whether the server
+would take the answers back if asked now. The page shows "Take my answers back" by it, and
+never works it out itself.
 
 The owner's addresses are under `/api/owner`, and need a session:
 
@@ -136,11 +157,73 @@ The owner's addresses are under `/api/owner`, and need a session:
 | `POST /api/owner/forms`                         | Brings a form in, as a draft                      |
 | `POST /api/owner/forms/<form>/definition`       | Gives it a new definition                         |
 | `POST /api/owner/forms/<form>/state`            | Opens or closes it                                |
+| `POST /api/owner/forms/<form>/controller`       | Says who runs it, as a new version                |
+| `DELETE /api/owner/forms/<form>`                | Deletes it and everything under its id            |
+| `DELETE /api/owner/account`                     | Deletes the account, once it has no forms         |
 | `GET /api/owner/forms/<form>/export/<name>`     | `responses.csv`, `codebook.csv`, `detached.csv`   |
 | `DELETE /api/owner/forms/<form>/responses`      | Deletes every response, and what is kept apart    |
 | `DELETE /api/owner/forms/<form>/responses/<id>` | Deletes one response                              |
 
 Bodies there may be up to 4 MB, because a Tally form's page data runs to a megabyte or two.
+
+Deleting a form takes what the person typed to confirm (`{ "confirm": … }`), the form's id:
+the page asks for it, and the server does not take the page's word that it did. Deleting an
+account takes the account's current password (`{ "password": … }`), checked by Better Auth's
+own `verifyPassword` and counted with the tries at changing the password, per account. An
+email address would not do: whoever holds a stolen session can read it off the account page.
+
+### Taking answers back
+
+A respondent has no account, so what lets them take their answers back is what lets them read
+them: the secret in their address. Whoever holds the address can do it, on any device.
+
+- **Before finishing**, always, whatever the form's state.
+- **After finishing**, while the form is **open** and the definition the response began under
+  says `"until-closed"`. Closing the form ends it: that is when a study starts counting, and
+  what it has counted should not change under it. Opening the form again allows it again.
+- The server decides, in the statements that delete: each asks again whether the response is
+  still unfinished, or the form still open, so that a request to close the form or complete
+  the response that arrives in between cannot be overtaken (`withdrawResponse`,
+  `server/responses.ts`).
+- **A closed form answers like a wrong secret and a missing response**, with the same 404 and
+  the same bytes: the address says nothing about a form's state. A form whose rule is
+  `"until-complete"` answers 409 for a finished response, as it always has.
+- **One batch** deletes the answers and the response. The time a question was on screen is a
+  column of its answer, and the times a response was begun and finished are columns of the
+  response, so nothing of it is left but one thing: `definition.withdrawn`, the count of
+  responses to that version that were taken back, goes up by one in the same batch.
+- **What the form kept apart stays.** Such a row names no response, so there is nothing to find
+  it by. The end page says so before the person confirms, the page that follows says so again,
+  and both say to ask whoever runs the form.
+- When it is over (the form closed, or the rule `"until-complete"`), the end page and the first
+  page name the controller as the one to ask.
+
+Starting a response and storing a kept-apart answer make the mirror-image check: for a form
+that has a row, their inserts ask that the form is still there and open, so that a request
+that read the form a moment before it was deleted or closed writes nothing. Giving a form a
+new definition does the same for the definition's row as well as the form's pointer to it: a
+replace that loses to a delete, or to the form being opened, leaves no version behind.
+
+**Statements that ask again live in `server/statements.ts`**, as SQL with its values and no
+import of the Worker's runtime. No pair of real requests can be made to arrive in the losing
+order on purpose, so the tests build the statements as the server does from what it read,
+let the other request go first, and then run them against the migrated database
+(`test/withdrawal.test.ts`, `test/owner.test.ts`). A new statement that depends on something
+read earlier goes there, with such a test.
+
+### What a respondent is told
+
+The first page shows, under the form's own words: who runs it and how to reach them, until
+when answers can be taken back, and a link to `/f/<form>/stored`. That page is made from the
+server's schema, not written beside it: `storedColumns` (`server/stored.ts`) lists the columns
+of `response`, `answer` and `detached_answer`, the page shows a line of plain words for each
+(`strings.stored.columns`), and a column without words is shown by its name.
+`test/stored.test.ts` compares the page with the tables as the migrations made them, and fails
+on a column that is missing or has no words. It also lists every table of the migrated
+database and fails on one that is neither on the page nor in `OTHER_TABLES` (`server/stored.ts`)
+with a reason for being left off, so that a new table cannot go unmentioned by default. The page also says what is not stored, what
+taking answers back removes and leaves, and how long a deleted answer stays in the database's
+own history. [data.md](data.md) is the same for whoever runs a deployment.
 
 ### Accounts, and who may see results
 
@@ -240,13 +323,15 @@ things stand in the way of a flood, and a third is planned:
   from one address), and one on `POST /api/auth/*` (for example, twenty a minute). The second
   backs up the Worker's own count per sender, and stops a flood before it costs a request. This is what stops one sender without stopping everyone, and it keeps the
   address out of the Worker, its tables and its logs. It is not part of this repository: a
-  deployment without it has the ceiling only.
+  deployment without it has the ceiling only. [self-hosting.md](self-hosting.md) gives the two
+  rules field by field, and what each Cloudflare plan allows of them.
 - **Later, Turnstile on Start**, so that a response is started by a browser a person is using.
 
 ### Storage (D1)
 
 - `definition`: each definition a response was started under, as JSON, under a hash of its
-  content. A form that has not changed adds no row.
+  content. A form that has not changed adds no row. Beside it, `withdrawn`: how many responses
+  to it were taken back by the people who gave them.
 - `response`: id, form id, the hash of its definition, the version of the answers' shape, a seal
   of the secret, the device class, the position, and when it was created, updated and completed.
 - `answer`: one row per response, question and item, with the value as JSON, the active time and
@@ -254,9 +339,23 @@ things stand in the way of a flood, and a third is planned:
 - `detached_answer`: a random key, the form id and the answers. Nothing else.
 - `form`: id, the owning account, title, state, the hash of the definition new responses start
   under, and when it was created and updated.
+- `retired_form_id`: the id of a deleted form and the account that had it. Nothing else.
 - `user`, `session`, `account`, `verification`: Better Auth's tables, for the people who run
-  forms. Deleting a `user` row deletes their `form` rows and leaves the responses, and the app
-  has no way to delete an account yet.
+  forms. Deleting a `user` row in the database deletes their `form` rows and leaves the
+  responses, which is why the app refuses to delete an account that still owns a form.
+
+**Deleting a form** removes, in one batch, its responses and their answers, what it kept
+apart, its row and every definition it has had (`deleteForm`, `server/owner.ts`). The batch
+also writes the one thing that is kept: the id and the account that had it, in
+`retired_form_id`. Links to a form outlive it, so its id can be used again only by that
+account; anyone else is told what they would be told about an id in use, and once the account
+is deleted nobody can. The row does not refer to `user`, so that it stays. A batch the
+database refuses (one too large, for instance) deleted nothing, and the owner is told so in
+words, with what to do. **Deleting an account** removes the `user` row
+with its sessions and password, in a statement that asks again whether it owns a form
+(`deleteAccount`): the forms go first, one by one, each with its numbers in view, because
+deleting a form is a decision about a study's data and deleting an account should not make it
+by the way.
 
 **An answer to a question the flow no longer asks is deleted when the answer that closed the
 question is saved.** Someone who changes "stopped" to "never" has taken back why they stopped,
@@ -319,6 +418,30 @@ The number of kept-apart rows is not said while a form is open either: the setti
 its delete dialog say only that such answers, if there are any, are removed too. A number that
 went up just after a completion would say that this person left something.
 
+**The count of withdrawn responses** raises the same question for the owner. What is kept is
+one number per version: a response taken back before finishing and one taken back after are
+not told apart, there is no time, and no id. What an owner can still work out:
+
+- **Which one, by looking twice.** A response that was in the list, or in an export, and is
+  not there now was withdrawn or deleted. This is what tells an owner that someone withdrew,
+  with or without a count; the count adds that it was the person's doing and not a deletion. An owner who exported yesterday still has those
+  answers: withdrawing removes them from the server, and cannot reach a copy. The pages for
+  respondents say so. Nothing in the app can prevent it; a study that promises more has to
+  promise it about its own copies.
+- **When, between two looks.** The count is shown without a time, but an owner who reads the
+  page often knows between which two readings it rose. Completion times of the responses that
+  remain narrow nothing further, since the one that left took its times with it.
+- **That a kept-apart row has lost its response.** Kept-apart rows stay, so a closed form can
+  hold more of them than it has completed responses. That says that some of those rows belong
+  to people who withdrew, and not which.
+- **On a very small study, who.** One withdrawal among three people the owner invited by name
+  is not hard to place. The count does not make that worse than the missing response already
+  does, and it is said here because no number can make a small group a crowd.
+
+The count was kept, against keeping nothing, because a study reports how many withdrew, and
+because started and completed counts that fell with no explanation would send an owner
+looking for the reason in exactly the way described above.
+
 **Whoever runs the deployment**, or reads its database, has all of that and more:
 
 - **Time, through D1's history.** A response's `completed_at` is stored to the millisecond,
@@ -330,6 +453,8 @@ went up just after a completion would say that this person left something.
   Worker's invocation logs are off; the two requests still came from one connection.
 - **The table itself**, without the threshold or the shuffle, which are the app's and not the
   database's.
+- **A withdrawn response, for up to 30 days.** D1's history holds the database as it was
+  before the deletion, and shows when the count on a definition changed.
 
 Closing the first of those would take holding detached answers back and writing them in
 shuffled batches, so that a row's first appearance says nothing about one response. That is not
@@ -410,8 +535,10 @@ the browser's bundle. A test reads the built bundle to hold that.
 
 These are seams, not features: the builder, teams and sharing a form's results, signing in
 through Gateweave ID, email (and with it password reset), embedding, the public API and
-webhooks, a second layout for comparison, and deleting a form or an account from the app.
+webhooks, and a second layout for comparison.
 
-Withdrawing covers a response that is not complete. A completed one is deleted by the form's
-owner, who cannot tell which response is whose: a respondent who wants theirs removed has to
-give the owner its address or its id.
+A response that can no longer be taken back by the person who gave it (its form is closed, or
+the form's rule is `"until-complete"`) is deleted by the form's owner, who cannot tell which
+response is whose: a respondent who wants theirs removed has to give the owner its id. And
+what a form kept apart can only be removed by its content, by the owner once the form is
+closed and shows it, or by whoever runs the deployment.

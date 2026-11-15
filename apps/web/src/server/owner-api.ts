@@ -1,18 +1,24 @@
 import { env } from "cloudflare:workers";
 import { codebookCsv, detachedCsv, responsesCsv } from "@gateweave/forms-results";
+import { controllerSchema } from "@gateweave/forms-schema";
+import { APIError } from "better-auth/api";
 import { z } from "zod";
-import { type CurrentUser, currentUser, db } from "./auth";
+import { type CurrentUser, currentUser, db, getAuth } from "./auth";
+import { TOO_MANY_TRIES } from "./auth/config";
 import { readCapped, TooLarge } from "./body";
 import {
 	addExamples,
 	createForm,
+	deleteAccount,
 	deleteAllResponses,
+	deleteForm,
 	deleteResponse,
 	NotFound,
 	ownedForm,
 	preview,
 	Refused,
 	replaceDefinition,
+	setController,
 	setState,
 } from "./owner";
 import { DETACHED_MIN, loadDetached, loadRecords, versionOf } from "./results";
@@ -34,6 +40,40 @@ const definitionBody = z.strictObject({ definition: z.unknown() });
 // Not "draft": a form that was opened has been seen by people, and may have their answers.
 // Going back to a draft would make its link say it is not open yet, which would not be true.
 const stateBody = z.strictObject({ state: z.enum(["open", "closed"]) });
+/** What the person typed to say that they mean it: the form's id. */
+const confirmBody = z.strictObject({ confirm: z.string().max(320) });
+const passwordBody = z.strictObject({ password: z.string().min(1).max(1024) });
+
+/** Whether this is the signed-in account's password, by Better Auth's own check of it. */
+async function passwordIsRight(request: Request, password: string): Promise<boolean> {
+	try {
+		const checked = await getAuth().api.verifyPassword({
+			body: { password },
+			headers: request.headers,
+		});
+		return checked.status === true;
+	} catch (error) {
+		// It refuses a wrong password by throwing. Anything else is a fault, and not a yes.
+		if (error instanceof APIError) return false;
+		throw error;
+	}
+}
+
+/**
+ * The answer to a deleted account: done, and the browser's session cookie taken back. The
+ * session went with the account, so the cookie opens nothing; it is cleared so that the browser
+ * does not go on sending it.
+ */
+async function signedOut(request: Request): Promise<Response> {
+	const headers = new Headers({ "Cache-Control": "no-store" });
+	try {
+		const cleared = await getAuth().api.signOut({ headers: request.headers, asResponse: true });
+		for (const cookie of cleared.headers.getSetCookie()) headers.append("Set-Cookie", cookie);
+	} catch {
+		// The account is gone either way, and a cookie that names no session is nobody's.
+	}
+	return Response.json({ deleted: true }, { headers });
+}
 
 function json(body: unknown, status = 200): Response {
 	return Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
@@ -172,6 +212,48 @@ const routes: Array<[method: string, path: string, handler: Handler]> = [
 				);
 			}
 			return csv(`${row.id}-kept-apart`, detachedCsv(detached.questions, detached.rows));
+		},
+	],
+	[
+		"POST",
+		"forms/:/controller",
+		async (user, request, [formId = ""]) => {
+			const row = await ownedForm(db, user, formId);
+			await setController(db, row, await read(request, controllerSchema));
+			return json({ replaced: true });
+		},
+	],
+	[
+		"DELETE",
+		"forms/:",
+		async (user, request, [formId = ""]) => {
+			const row = await ownedForm(db, user, formId);
+			// The id, typed by the person: the page asks for it, and the server does not take
+			// the page's word that it did.
+			const { confirm } = await read(request, confirmBody);
+			if (confirm.trim().toLowerCase() !== row.id) {
+				throw new Refused(400, "Type the form's id exactly as it is shown to delete the form.");
+			}
+			await deleteForm(db, row);
+			return json({ deleted: true });
+		},
+	],
+	[
+		"DELETE",
+		"account",
+		async (user, request) => {
+			const { password } = await read(request, passwordBody);
+			// The current password, not something a session can read: a session cookie may be
+			// stolen, and whoever holds one sees the account's email address. Counted with the
+			// tries at changing the password, which ask for the same thing.
+			if (!(await env.AUTH_LIMIT.limit({ key: `/change-password ${user.id}` })).success) {
+				throw new Refused(429, TOO_MANY_TRIES);
+			}
+			if (!(await passwordIsRight(request, password))) {
+				throw new Refused(403, "The password is not right, so the account was not deleted.");
+			}
+			await deleteAccount(db, user);
+			return signedOut(request);
 		},
 	],
 	[

@@ -3,11 +3,14 @@ import {
 	type Definition,
 	detachedQuestions,
 	detachedQuestionsShown,
+	withdrawalOf,
 } from "@gateweave/forms-schema";
 import { type FormEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
-import { RequestFailed, sendDetached } from "#/lib/client";
+import { RequestFailed, sendDetached, withdrawResponse } from "#/lib/client";
 import { type Draft, fromDraft, toDraft } from "#/lib/draft";
+import { forgetResponse } from "#/lib/local";
 import { strings } from "#/lib/strings";
+import { Contact, storedAddress } from "./about-form";
 import { Button } from "./button";
 import { QuestionInput } from "./inputs";
 import { RichTextView } from "./rich-text";
@@ -25,15 +28,27 @@ export function EndPage({
 	definition,
 	askDetached,
 	children,
+	footer,
 	version,
+	responseId,
+	secret,
+	canWithdraw,
+	onWithdrawn,
 }: {
 	definition: Definition;
 	/** Whether the person finished just now, in this page. */
 	askDetached: boolean;
 	/** What follows the thanks and the detached questions: the person's own answers to look over. */
 	children?: ReactNode;
+	/** What closes the page, under everything a person can still do about their answers. */
+	footer?: ReactNode;
 	/** Names the wording the response began under, for the copy of its consent. */
 	version: string;
+	responseId: string;
+	secret: string;
+	/** Whether the server said it would take the answers back if asked. */
+	canWithdraw: boolean;
+	onWithdrawn: () => void;
 }) {
 	const heading = useRef<HTMLHeadingElement>(null);
 	useEffect(() => {
@@ -57,17 +72,131 @@ export function EndPage({
 			)}
 			{hasDetached && <DetachedForm definition={definition} />}
 			{children}
-			{definition.consent && (
+			<TakeBack
+				definition={definition}
+				responseId={responseId}
+				secret={secret}
+				canWithdraw={canWithdraw}
+				onWithdrawn={onWithdrawn}
+			/>
+			<div className="flex flex-col">
+				{definition.consent && (
+					<a
+						href={consentAddress(definition.id, version)}
+						target="_blank"
+						rel="noopener"
+						className={quietLink}
+					>
+						{strings.yours.consentCopy}
+					</a>
+				)}
 				<a
-					href={consentAddress(definition.id, version)}
+					href={storedAddress(definition.id, version)}
 					target="_blank"
 					rel="noopener"
-					className="inline-flex min-h-11 items-center self-start text-sm text-muted-foreground underline underline-offset-4"
+					className={quietLink}
 				>
-					{strings.yours.consentCopy}
+					{strings.about.stored}
 				</a>
-			)}
+			</div>
+			{footer}
 		</main>
+	);
+}
+
+const quietLink =
+	"inline-flex min-h-11 items-center self-start text-sm text-muted-foreground underline underline-offset-4";
+
+/**
+ * What a person can still do about answers they have finished giving: take them back, while
+ * the form's rule and its state allow it, or else whom to ask. Which of the two it is comes
+ * from the server, and the server decides again when the button is pressed.
+ *
+ * Anyone who opens the response's address sees this, on any device: the address is what allows
+ * it, as it is what shows the answers.
+ */
+function TakeBack({
+	definition,
+	responseId,
+	secret,
+	canWithdraw,
+	onWithdrawn,
+}: {
+	definition: Definition;
+	responseId: string;
+	secret: string;
+	canWithdraw: boolean;
+	onWithdrawn: () => void;
+}) {
+	const t = strings.end.takeBack;
+	const [asking, setAsking] = useState(false);
+	const [state, setState] = useState<"idle" | "sending" | "failed" | "refused">("idle");
+	const { controller } = definition;
+
+	const withdraw = async () => {
+		setState("sending");
+		try {
+			await withdrawResponse(responseId, secret);
+			forgetResponse(definition.id);
+			onWithdrawn();
+		} catch (error) {
+			const status = error instanceof RequestFailed ? error.status : 0;
+			// The server would not: trying again would not change that, so it is not offered.
+			setState(status === 404 || status === 409 ? "refused" : "failed");
+		}
+	};
+
+	const possible = canWithdraw && state !== "refused";
+	return (
+		<section className="flex flex-col gap-3 rounded-xl border p-4">
+			<h2 className="text-lg font-semibold">{t.title}</h2>
+			<p className="text-sm text-muted-foreground">
+				{possible
+					? t.can
+					: state === "refused"
+						? t.refused
+						: withdrawalOf(definition) === "until-complete"
+							? t.never
+							: t.closed}
+			</p>
+			{controller && (
+				<p className="text-sm break-words">
+					{strings.about.runBy} <span className="font-medium">{controller.name}</span>
+					{" · "}
+					<Contact contact={controller.contact} />
+				</p>
+			)}
+			{possible &&
+				(asking ? (
+					<div className="flex flex-col gap-3">
+						<p className="font-medium">{t.sure}</p>
+						{detachedQuestions(definition).length > 0 && (
+							<p className="text-sm">{t.sureDetached}</p>
+						)}
+						<div className="flex flex-wrap gap-2">
+							<Button
+								className="bg-destructive text-white hover:bg-destructive/90"
+								disabled={state === "sending"}
+								onClick={() => void withdraw()}
+							>
+								{t.confirm}
+							</Button>
+							<Button variant="outline" onClick={() => setAsking(false)}>
+								{strings.owner.cancel}
+							</Button>
+						</div>
+					</div>
+				) : (
+					<Button variant="outline" className="self-start" onClick={() => setAsking(true)}>
+						{t.ask}
+					</Button>
+				))}
+			{state === "failed" && (
+				<p role="alert" className="font-medium text-destructive">
+					{t.failed}
+				</p>
+			)}
+		</section>
 	);
 }
 
