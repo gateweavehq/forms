@@ -96,24 +96,101 @@ The report says what the source held, what each section became and what was chan
 
 | Address                           | What it is                                                      |
 | --------------------------------- | --------------------------------------------------------------- |
-| `/`                               | Lists the forms this server has                                 |
+| `/`                               | A way in for the people who run forms. Lists no forms           |
 | `/f/<form>`                       | The form's title and consent. Starting makes the response       |
 | `/f/<form>/r/<response>#<secret>` | The cards. Opening this address anywhere continues the response |
+| `/f/<form>/consent`               | The consent text on its own, to print or keep                   |
+| `/login`, `/account`              | Signing in and up, and the account                              |
+| `/forms`, `/forms/new`            | A person's forms, and bringing one in                           |
+| `/forms/<form>`                   | Its results: overview, items, questions, responses, kept apart  |
+| `/forms/<form>/settings`          | Opening and closing, versions, a new definition, deleting       |
 
-Forms are the files in `examples/`, read when the Worker is built (`src/server/forms.ts`).
+A form is a row in `form` that belongs to one account. Its id is what its address carries, so
+it never changes; its wording changes by pointing at a newer definition. It is a `draft` (its
+link says it is not open), `open`, or `closed` (no new responses; those begun can finish).
+
+The files in `examples/` are served only where `FORMS_EXAMPLES` is `"1"`, which development and
+the tests set. On a deployment a form exists because someone brought it in.
 
 ### API
 
-| Request                             | Does                                                       |
-| ----------------------------------- | ---------------------------------------------------------- |
-| `POST /api/forms/<form>/responses`  | Starts a response. Returns its id and secret, once         |
-| `GET /api/responses/<id>`           | The answers so far, the position, whether it is complete   |
-| `POST /api/responses/<id>/progress` | Stores one answer as it is given, and the new position     |
-| `POST /api/responses/<id>/complete` | Closes the response. Refused while a required one is empty |
-| `POST /api/forms/<form>/detached`   | Stores the answers a form keeps apart                      |
+| Request                             | Does                                                        |
+| ----------------------------------- | ----------------------------------------------------------- |
+| `POST /api/forms/<form>/responses`  | Starts a response. Returns its id and secret, once          |
+| `GET /api/responses/<id>`           | The answers so far, the position, whether it is complete    |
+| `POST /api/responses/<id>/progress` | Stores one answer as it is given, and the new position      |
+| `POST /api/responses/<id>/complete` | Closes the response. Refused while a required one is empty  |
+| `DELETE /api/responses/<id>`        | Withdraws a response that is not complete, with its answers |
+| `POST /api/forms/<form>/detached`   | Stores the answers a form keeps apart                       |
 
-The three under `/api/responses` need `Authorization: Bearer <secret>`. A wrong secret and an
+The four under `/api/responses` need `Authorization: Bearer <secret>`. A wrong secret and an
 unknown id get the same 404. Bodies are JSON, checked with zod, at most 64 KB.
+
+The owner's addresses are under `/api/owner`, and need a session:
+
+| Request                                         | Does                                              |
+| ----------------------------------------------- | ------------------------------------------------- |
+| `POST /api/owner/preview`                       | Says what a definition or Tally page would become |
+| `POST /api/owner/forms`                         | Brings a form in, as a draft                      |
+| `POST /api/owner/forms/<form>/definition`       | Gives it a new definition                         |
+| `POST /api/owner/forms/<form>/state`            | Opens or closes it                                |
+| `GET /api/owner/forms/<form>/export/<name>`     | `responses.csv`, `codebook.csv`, `detached.csv`   |
+| `DELETE /api/owner/forms/<form>/responses`      | Deletes every response, and what is kept apart    |
+| `DELETE /api/owner/forms/<form>/responses/<id>` | Deletes one response                              |
+
+Bodies there may be up to 4 MB, because a Tally form's page data runs to a megabyte or two.
+
+### Accounts, and who may see results
+
+The people who run forms sign in with an email address and a password (Better Auth, set up as
+in Gateweave Guard). Respondents never do. The two sides do not meet: nothing under `/f/` or
+the respondent's API reads a session, and nothing on the owner's side takes a response's secret.
+
+- **One place decides ownership.** `ownedForm` in `server/owner.ts` returns a form's row only to
+  the account it belongs to. Every owner page, server function and address starts there, and the
+  functions that read responses take that row, not an id.
+- **"Not found" is one answer.** A missing form, someone else's, and a request with no session
+  get the same response. `test/ownership.test.ts` asks every page and address as another
+  account and as nobody, and compares the bytes with what a missing form gets.
+- **A change must come from the app's own pages.** The session cookie is `SameSite=Lax`, which
+  keeps it off the POSTs other sites start in current browsers. Every request that is not a GET
+  must carry the app's own `Origin` as well, so that this does not rest on one browser default.
+- **Sessions hold nothing about the device.** Better Auth's columns for the network address and
+  the user agent are stored empty, and its limiter, which counts by address, is off. Tries at
+  signing in or up are counted per email address tried (`AUTH_LIMIT`).
+- **Who may make an account** is `SIGN_UP_ALLOW`: addresses and `@domains`. Without it anyone
+  can, so a deployment should set it.
+
+There is no email yet, so no password reset and no verification of an address.
+
+### Results (`packages/results`)
+
+Results are worked out in a package with no storage in it, from a definition and the responses
+to it, so that the numbers a study will quote can be checked by hand: its tests run over eight
+made-up responses with the working written beside them.
+
+- **Per version.** A response belongs to the definition it began under, and the same question
+  id can mean something else in another, so results are never added up across two. Each page
+  names the version it shows and how many responses that is.
+- **Seen and answered.** A question that was shown and left empty is stored with no value. Its
+  summary gives both counts, and every share is out of those who answered.
+- **Active time** is the time questions were on screen in a visible tab, added up. Medians are
+  of completed responses.
+- **Where people stopped** is the last position an unfinished response saved, by section and
+  group. The browser sends positions, so one that names nothing in the form is counted apart.
+- **Signals** mark what is worth a second look and prove nothing: a completed response under
+  30% of the median active time, and a group where three or more items got the same status.
+- **Filters** are a device class and one answer of a single-choice question asked once. They
+  travel in the page's address.
+- **The wide export** has one row per response and one column per thing asked, an item's
+  questions under `<item>.<question>`; the codebook says what each column and value means. A
+  cell that begins with `=`, `+`, `-` or `@` gets a leading apostrophe: answers are typed by
+  strangers, and a spreadsheet would run them for the person who opens the file.
+- **What is kept apart** has its own page and its own export, read in the order of the rows'
+  random keys. It never appears beside a response.
+
+A page reads every response of the version it shows. That is fine for the hundreds a study
+gets; a form with many thousands would want its counts kept as they change.
 
 ### Limits on the open addresses
 
@@ -143,6 +220,11 @@ things stand in the way of a flood, and a third is planned:
 - `answer`: one row per response, question and item, with the value as JSON, the active time and
   the number of changes. The server counts a change in the statement that writes the answer.
 - `detached_answer`: a random key, the form id and the answers. Nothing else.
+- `form`: id, the owning account, title, state, the hash of the definition new responses start
+  under, and when it was created and updated.
+- `user`, `session`, `account`, `verification`: Better Auth's tables, for the people who run
+  forms. Deleting a `user` row deletes their `form` rows and leaves the responses, and the app
+  has no way to delete an account yet.
 
 While a response is open, an answer stays stored even when a later change hides its question:
 changing back brings it back. **At completion, answers to questions the final flow does not
@@ -262,9 +344,10 @@ the browser's bundle. A test reads the built bundle to hold that.
 
 ## Not built yet
 
-These are seams, not features: the builder, sign-in, results and export, embedding, the public
-API and webhooks, email, a second layout for comparison, and deployment. Three things a
-deployment needs first are also open:
+These are seams, not features: the builder, teams and sharing a form's results, signing in
+through Gateweave ID, email (and with it password reset), embedding, the public API and
+webhooks, a second layout for comparison, and deleting a form or an account from the app.
 
-- **Erasing.** A study must be able to export its responses and then delete them.
-- **Withdrawal.** A response's address could let its owner delete it.
+Withdrawing covers a response that is not complete. A completed one is deleted by the form's
+owner, who cannot tell which response is whose: a respondent who wants theirs removed has to
+give the owner its address or its id.

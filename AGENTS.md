@@ -7,22 +7,23 @@ of truth for how the project is built; `CLAUDE.md` only adds to it.
 
 Gateweave Forms is an open-source tool for surveys and forms whose job is that people finish the
 long ones. It belongs to the [Gateweave](https://gateweave.com) family and runs as one Cloudflare
-Worker. So far it has the form definition, an importer for Tally forms and the respondent's side;
-it runs locally only.
+Worker. It has the form definition, an importer for Tally forms, the respondent's side, accounts
+for the people who run forms, and their results and exports. There is no builder yet.
 
 Read [docs/architecture.md](docs/architecture.md) before changing the definition, the flow,
 storage or anything a respondent sees.
 
 ## Repository map
 
-| Path                    | What lives there                                                          |
-| ----------------------- | ------------------------------------------------------------------------- |
-| `packages/schema`       | The definition (zod), its checks, rules, answers and flow. No server code |
-| `packages/tally-import` | Tally page data into a definition, with a report and a command line       |
-| `apps/web`              | The Worker: TanStack Start pages, the JSON API, D1 through Drizzle        |
-| `examples/`             | Made-up forms, each named after its id and served at `/f/<id>`            |
-| `docs/`                 | Architecture                                                              |
-| `wrangler.jsonc`        | The Worker's config, at the root as in the sibling repositories           |
+| Path                    | What lives there                                                            |
+| ----------------------- | --------------------------------------------------------------------------- |
+| `packages/schema`       | The definition (zod), its checks, rules, answers and flow. No server code   |
+| `packages/tally-import` | Tally page data into a definition, with a report and a command line         |
+| `packages/results`      | Results from responses: counts, medians, signals, filters, CSV. Pure        |
+| `apps/web`              | The Worker: TanStack Start pages, Better Auth, the APIs, D1 through Drizzle |
+| `examples/`             | Made-up forms, served at `/f/<id>` only where `FORMS_EXAMPLES` is `"1"`     |
+| `docs/`                 | Architecture                                                                |
+| `wrangler.jsonc`        | The Worker's config, at the root as in the sibling repositories             |
 
 ## Commands
 
@@ -67,7 +68,9 @@ silently.
 5. **A detached answer is stored without anything that names its response**: no response id,
    no time, no order of arrival, and it is sent in a request without the response's secret. The
    response's own address refuses a detached question. Do not add a column, a log or a header
-   that would pair the two. That is all it is: an operator can still infer a pairing (see
+   that would pair the two, and never show or export a detached answer beside a response: the
+   owner's "Kept apart" page and its export read the rows in the order of their random keys.
+   That is all it is: an operator can still infer a pairing (see
    "What an operator could still infer" in `docs/architecture.md`), so never write "cannot be
    linked" or "anonymous" in the app, the docs or an example.
 6. **How the cards behave is evidence, not taste.** No progress bar or percentage. Follow-ups
@@ -85,10 +88,27 @@ silently.
 10. **Migrations are append-only.** Generate them with `pnpm --filter @gateweave/forms-web
     db:generate` and commit them. Never edit one that has been merged.
 11. **Every string the app shows is in `apps/web/src/lib/strings.ts`.** A form's own wording
-    comes from its definition.
+    comes from its definition. One exception: what the owner's API refuses with (a definition's
+    problems, the importer's notes) is written where it is found, in `packages/schema`,
+    `packages/tally-import` and `server/owner.ts`, and shown as it comes.
 12. **A response belongs to the definition it started under.** That definition is stored
     (`definition` table) and is what the response is checked against and read with, whatever the
-    form says today. Never validate or interpret a response against the current form.
+    form says today. Never validate or interpret a response against the current form. Results
+    are worked out per definition, never across two.
+13. **A form's results are its owner's alone.** Every owner page, server function and address
+    under `/api/owner` gets the form from `ownedForm` (`server/owner.ts`), and nothing else
+    reads a response for an account. A missing form, someone else's and no session get the
+    same "not found", byte for byte: never answer "not yours". A new route gets a line in
+    `test/ownership.test.ts`.
+14. **Accounts and respondents do not meet.** Nothing under `/f/` or the respondent's API reads
+    a session or a cookie; nothing on the owner's side accepts a response's secret. A request
+    that changes something for an account must come from the app's own origin
+    (`server/owner-api.ts`), so that this does not rest on the cookie's `SameSite` alone.
+    Sessions store no network address and no user agent either.
+15. **A number comes with what it is out of.** Every results page says which version and how
+    many responses it counts, "seen" and "answered" stay apart, and a median of nothing is
+    nothing. The arithmetic lives in `packages/results`, with tests whose expected numbers are
+    worked out by hand in the comments.
 
 ## Code style
 
@@ -112,6 +132,8 @@ silently.
 - Test behaviour through public APIs, not internals.
 - `packages/schema` and `packages/tally-import` have unit tests in `test/`. The importer's tests
   build their Tally page data with `test/tally-builder.ts` from a made-up form.
+- `packages/results` is tested on eight made-up responses (`test/games.ts`) whose totals are
+  written out beside them. Change a number there only with its working.
 - `apps/web` has unit tests in `src/` and Worker tests in `test/`. The Worker tests build the app
   and run it in workerd through Miniflare, with a migrated D1 database and no network; see
   `test/forms-worker.ts`.
@@ -134,4 +156,5 @@ silently.
   in the body.
 - Commits, pull requests, comments and release notes carry no AI attribution: no
   `Co-authored-by` trailer naming an AI, no "Generated with" line and no session link.
-- Never commit `.dev.vars` or print its contents. The app needs no secret so far.
+- Never commit `.dev.vars` or print its contents. A new secret goes into `.dev.vars.example`
+  with a placeholder and into `secrets.required` in `wrangler.jsonc`.
