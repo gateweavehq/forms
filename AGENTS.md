@@ -62,6 +62,8 @@ silently.
    cookie or a log line.
 4. **Nothing about the person is stored.** No network address, no user agent, in tables or in
    logs. `device` is the viewport's rough width. Keep invocation logs off in `wrangler.jsonc`.
+   The ceilings on the two open addresses are counted per form: never key a limit, a log or a
+   row by anything about the sender. Limits per address belong at Cloudflare's edge.
 5. **A detached answer is stored without anything that names its response**: no response id,
    no time, no order of arrival, and it is sent in a request without the response's secret. The
    response's own address refuses a detached question. Do not add a column, a log or a header
