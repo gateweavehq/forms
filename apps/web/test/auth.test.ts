@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { as, authPost, cookiesOf, newPerson, signUp } from "./accounts";
+import { as, authPost, cookiesOf, newPerson, ORIGIN, signUp } from "./accounts";
 import { type Forms, startForms } from "./forms-worker";
 
 let forms: Forms;
@@ -119,6 +119,100 @@ describe("tries at an account", () => {
 		} finally {
 			await limited.dispose();
 		}
+	});
+});
+
+describe("tries from one sender", () => {
+	const from = (sender: string, path: string, body: unknown, cookie = "") => ({
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			Origin: ORIGIN,
+			"CF-Connecting-IP": sender,
+			...(cookie ? { Cookie: cookie } : {}),
+		},
+		body: JSON.stringify(body),
+		path: `/api/auth${path}`,
+	});
+	const send = (forms: Forms, { path, ...init }: ReturnType<typeof from>) =>
+		forms.fetch(path, init);
+
+	it("are limited whatever addresses they try, and another sender is not held up", async () => {
+		const limited = await startForms({ sendersPerMinute: 3 });
+		try {
+			const guess = (sender: string) =>
+				send(
+					limited,
+					from(sender, "/sign-in/email", { email: newPerson().email, password: "a-wrong-guess" }),
+				);
+			const statuses: number[] = [];
+			// A different address each time, so the limit per address never counts to two.
+			for (let tries = 0; tries < 5; tries++) statuses.push((await guess("203.0.113.9")).status);
+			expect(statuses).toEqual([401, 401, 401, 429, 429]);
+			// Making an account is counted with them.
+			const made = await send(limited, from("203.0.113.9", "/sign-up/email", newPerson()));
+			expect(made.status).toBe(429);
+			expect((await guess("203.0.113.10")).status).toBe(401);
+			// Nothing of the sender is kept anywhere.
+			const everything = JSON.stringify([
+				(await limited.db.prepare("SELECT * FROM session").all()).results,
+				(await limited.db.prepare("SELECT * FROM user").all()).results,
+				limited.logs,
+			]);
+			expect(everything).not.toContain("203.0.113");
+		} finally {
+			await limited.dispose();
+		}
+	});
+
+	it("limits tries at changing a password per account", async () => {
+		const limited = await startForms({ triesPerMinute: 3 });
+		try {
+			const person = newPerson();
+			const cookie = await signUp(limited, person);
+			const other = await signUp(limited);
+			const change = (session: string, sender: string) =>
+				send(
+					limited,
+					from(
+						sender,
+						"/change-password",
+						{ currentPassword: "not-the-current-one", newPassword: "another-long-password" },
+						session,
+					),
+				);
+			const statuses: number[] = [];
+			// From a new sender each time: it is the account that is counted.
+			for (let tries = 0; tries < 5; tries++) {
+				statuses.push((await change(cookie, `203.0.113.${20 + tries}`)).status);
+			}
+			expect(statuses.slice(0, 3).every((status) => status !== 429 && status >= 400)).toBe(true);
+			expect(statuses.slice(3)).toEqual([429, 429]);
+			// Another account has tries of its own, and the password was never changed.
+			expect((await change(other, "203.0.113.20")).status).not.toBe(429);
+			expect((await authPost(limited, "/sign-in/email", person)).status).toBe(200);
+		} finally {
+			await limited.dispose();
+		}
+	});
+});
+
+describe("an account's details", () => {
+	it("cannot be given a picture: nobody's browser is sent to fetch one", async () => {
+		const person = newPerson();
+		const cookie = await signUp(forms, person);
+		const response = await authPost(
+			forms,
+			"/update-user",
+			{ image: "https://tracker.example.test/pixel.gif", name: "Renamed" },
+			cookie,
+		);
+		expect(response.status).toBe(404);
+		const row = await forms.db
+			.prepare("SELECT name, image FROM user WHERE email = ?")
+			.bind(person.email)
+			.first<{ name: string; image: string | null }>();
+		expect(row).toEqual({ name: person.name, image: null });
 	});
 });
 

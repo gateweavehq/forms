@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { getRequestHeaders } from "@tanstack/react-start/server";
 import { mayMakeAccount, parseAllowList } from "../../lib/sign-up-allow";
 import { createDb } from "../db";
-import { createAuth } from "./config";
+import { createAuth, TOO_MANY_TRIES } from "./config";
 
 export const db = createDb(env.DB);
 
@@ -40,8 +40,35 @@ function buildAuth() {
 	});
 }
 
-/** Everything from outside reaches Better Auth through here. */
-export function handleAuthRequest(request: Request): Promise<Response> {
+/** The answer to one try too many, in the shape Better Auth gives its own refusals. */
+function tooManyTries(): Response {
+	return Response.json({ message: TOO_MANY_TRIES, code: "TOO_MANY_TRIES" }, { status: 429 });
+}
+
+/**
+ * Everything from outside reaches Better Auth through here, and what could be a guess is
+ * counted first.
+ *
+ * Per sender, for every request that is not a read: the limit per email address (in
+ * `config.ts`) stops guessing at one account and does nothing against one sender trying many.
+ * The network address is used as the counter's key and nowhere else. This is the accounts'
+ * side only: nothing a respondent sends is counted by where it came from.
+ *
+ * Per account, for a change of password: it asks for the current one, so with a stolen session
+ * it is a way to guess at it that the limit per email address never sees.
+ */
+export async function handleAuthRequest(request: Request): Promise<Response> {
+	if (request.method !== "GET" && request.method !== "HEAD") {
+		// Cloudflare sets this on every request it passes on. Without it (a local run), all
+		// senders share one count.
+		const sender = request.headers.get("CF-Connecting-IP") || "unknown";
+		if (!(await env.AUTH_SENDER_LIMIT.limit({ key: sender })).success) return tooManyTries();
+		if (new URL(request.url).pathname.endsWith("/change-password")) {
+			const user = await currentUser(request.headers);
+			const key = `/change-password ${user?.id ?? ""}`;
+			if (user && !(await env.AUTH_LIMIT.limit({ key })).success) return tooManyTries();
+		}
+	}
 	return getAuth().handler(request);
 }
 

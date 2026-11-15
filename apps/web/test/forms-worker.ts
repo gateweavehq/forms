@@ -35,6 +35,7 @@ export async function startForms({
 	startsPerMinute = 10_000,
 	detachedPerMinute = 10_000,
 	triesPerMinute = 10_000,
+	sendersPerMinute = 10_000,
 	settings = {},
 }: {
 	origin?: string;
@@ -43,6 +44,8 @@ export async function startForms({
 	detachedPerMinute?: number;
 	/** How many tries at signing in or up one address gets a minute. */
 	triesPerMinute?: number;
+	/** How many requests to the accounts' addresses one network address gets a minute. */
+	sendersPerMinute?: number;
 	/** Other settings, such as `SIGN_UP_ALLOW`. */
 	settings?: Record<string, string>;
 } = {}) {
@@ -78,6 +81,10 @@ export async function startForms({
 							simple: { limit: detachedPerMinute, period: 60 },
 						},
 						AUTH_LIMIT: { namespace_id: "3", simple: { limit: triesPerMinute, period: 60 } },
+						AUTH_SENDER_LIMIT: {
+							namespace_id: "4",
+							simple: { limit: sendersPerMinute, period: 60 },
+						},
 					},
 					outboundService: (request: Request) => {
 						outbound.push(request.url);

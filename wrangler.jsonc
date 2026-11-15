@@ -22,12 +22,22 @@
 	// which is the job of a rate-limiting rule at Cloudflare's edge (docs/architecture.md).
 	// The numbers are per Cloudflare location and per minute. `namespace_id` only has to be
 	// unique within the account.
-	// AUTH_LIMIT counts tries at signing in and signing up per email address tried: ten a minute
-	// is plenty for a person and little for guessing at a password.
+	// AUTH_LIMIT counts tries at signing in and signing up per email address tried, and tries at
+	// changing a password per account: ten a minute is plenty for a person and little for
+	// guessing at a password. AUTH_SENDER_LIMIT counts every request that signs in, signs up or
+	// changes an account per network address it came from, so that one sender cannot go through
+	// a list of addresses. It is the one place the Worker reads a network address: as the key
+	// of this counter, for the accounts of people who run forms, never for a respondent, and it
+	// is neither stored nor logged.
 	"ratelimits": [
 		{ "name": "START_LIMIT", "namespace_id": "4770", "simple": { "limit": 120, "period": 60 } },
 		{ "name": "DETACHED_LIMIT", "namespace_id": "4771", "simple": { "limit": 60, "period": 60 } },
-		{ "name": "AUTH_LIMIT", "namespace_id": "4774", "simple": { "limit": 10, "period": 60 } }
+		{ "name": "AUTH_LIMIT", "namespace_id": "4774", "simple": { "limit": 10, "period": 60 } },
+		{
+			"name": "AUTH_SENDER_LIMIT",
+			"namespace_id": "4776",
+			"simple": { "limit": 30, "period": 60 }
+		}
 	],
 	// Signs the sessions of the people who run forms. A deploy without it is refused.
 	// Optional settings: BETTER_AUTH_URL, SIGN_UP_ALLOW, FORMS_EXAMPLES
@@ -55,7 +65,12 @@
 					"namespace_id": "4773",
 					"simple": { "limit": 60, "period": 60 }
 				},
-				{ "name": "AUTH_LIMIT", "namespace_id": "4775", "simple": { "limit": 10, "period": 60 } }
+				{ "name": "AUTH_LIMIT", "namespace_id": "4775", "simple": { "limit": 10, "period": 60 } },
+				{
+					"name": "AUTH_SENDER_LIMIT",
+					"namespace_id": "4777",
+					"simple": { "limit": 30, "period": 60 }
+				}
 			],
 			"secrets": { "required": ["BETTER_AUTH_SECRET"] },
 			"d1_databases": [

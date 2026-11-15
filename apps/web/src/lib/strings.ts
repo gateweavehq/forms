@@ -29,7 +29,7 @@ export const strings = {
 		closedNote: "This server takes new accounts from a list. Use the address that is on it.",
 		closed:
 			"This server takes new accounts from a list, and this address cannot make one. If it already has an account, sign in.",
-		tooMany: "Too many tries with this address. Wait a minute and try again.",
+		tooMany: "Too many tries. Wait a minute and try again.",
 		wrong: "The email or the password is not right.",
 		exists: "There is already an account with this address. Sign in instead.",
 		tooShort: "The password needs at least 8 characters.",

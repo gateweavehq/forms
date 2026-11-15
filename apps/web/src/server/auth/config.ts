@@ -28,7 +28,7 @@ export interface AuthConfig {
 
 export const SIGN_UP_CLOSED =
 	"This server takes new accounts from a list, and this address cannot make one. If it already has an account, sign in.";
-export const TOO_MANY_TRIES = "Too many tries with this address. Wait a minute and try again.";
+export const TOO_MANY_TRIES = "Too many tries. Wait a minute and try again.";
 
 /**
  * Builds the Better Auth instance: email and password, and nothing else yet. Kept free of
@@ -108,8 +108,10 @@ export function createAuth(config: AuthConfig) {
 						throw APIError.from("FORBIDDEN", { message: SIGN_UP_CLOSED, code: "SIGN_UP_CLOSED" });
 					}
 				}
-				// Counted per address tried, not per sender: guessing at one account's password
-				// is what this stops. A sender trying many addresses is for the edge to stop.
+				// Counted per address tried: guessing at one account's password is what this
+				// stops, wherever the guesses come from. It has a cost: someone who keeps trying
+				// a known address holds its owner out for as long as they keep at it. A sender
+				// trying many addresses is counted in `handleAuthRequest`.
 				if (config.allowTry && !(await config.allowTry(`${ctx.path} ${address}`))) {
 					throw APIError.from("TOO_MANY_REQUESTS", {
 						message: TOO_MANY_TRIES,
@@ -120,6 +122,9 @@ export function createAuth(config: AuthConfig) {
 		},
 		disabledPaths: [
 			// Offered to any session, and no page uses them. A cookie may be stolen.
+			// `/update-user` would also store a picture's address, which everyone who is shown
+			// it would then fetch from wherever it points.
+			"/update-user",
 			"/unlink-account",
 			"/verify-password",
 			"/get-access-token",
