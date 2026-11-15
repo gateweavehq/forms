@@ -32,7 +32,9 @@ question { id, type, label, description?, detail?, required?, showIf?, detached?
   `{ question, includes }`, `{ question, answered }`, with `row` for a grid, combined by `all`,
   `any` and `not`. Inside a block, a rule reads the same item's answers. A question that is not
   shown counts as unanswered for the rules after it, so changing an answer closes what hung on
-  the old one.
+  the old one. `isNot` holds for a missing answer too: a follow-up shown when the
+  status "is not X" is also asked of an item whose status was passed. To ask it only of those
+  who answered, combine it with `answered`.
 - **`required` means all of a question**: every row of a grid, a ranking of every option, every
   field of a `fields` question. A single field can be marked required by itself, which makes the
   question one that needs an answer without asking for its other fields (`missingFrom`).
