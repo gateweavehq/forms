@@ -145,6 +145,7 @@
 						{
 							"id": "sandwich-loaf",
 							"label": "Sandwich loaf",
+							"name": "sandwich loaves",
 							"definition": "A soft, even loaf baked in a tin, made for slicing.",
 							"detail": [
 								"The dough usually holds a little fat and sugar, which keep the crumb soft for days. It rises twice, the second time in the tin, and bakes at a moderate heat so the crust stays thin."
@@ -153,6 +154,7 @@
 						{
 							"id": "sourdough-loaf",
 							"label": "Sourdough loaf",
+							"name": "sourdough loaves",
 							"definition": "A crusty loaf raised with a starter instead of baker's yeast.",
 							"detail": [
 								"A starter is flour and water kept alive from bake to bake. It raises the dough slowly, over many hours, which gives the loaf its sour edge and open crumb.",
@@ -165,6 +167,7 @@
 						{
 							"id": "rye-bread",
 							"label": "Rye bread",
+							"name": "rye bread",
 							"definition": "A dense, dark loaf made mostly from rye flour.",
 							"detail": [
 								"Rye has little of the gluten that lets wheat dough stretch, so the loaf rises less and is often baked in a tin. Most recipes sour the dough, which rye needs to set properly."
@@ -173,6 +176,7 @@
 						{
 							"id": "brioche",
 							"label": "Brioche",
+							"name": "brioche",
 							"definition": "A rich loaf with butter and eggs worked into the dough.",
 							"detail": [
 								"The butter is added a piece at a time once the dough has come together, and the dough is chilled before shaping so that it can be handled at all."
@@ -187,6 +191,7 @@
 						{
 							"id": "pita",
 							"label": "Pita",
+							"name": "pita",
 							"definition": "A round flatbread that puffs into a pocket in a very hot oven.",
 							"detail": [
 								"The pocket forms when the water in the dough turns to steam faster than the crust can set, which takes an oven or a stone at its highest heat."
@@ -195,6 +200,7 @@
 						{
 							"id": "naan",
 							"label": "Naan",
+							"name": "naan",
 							"definition": "A soft, leavened flatbread, by tradition baked on the wall of a clay oven.",
 							"detail": [
 								"At home it is cooked in a very hot pan or under a grill. Yoghurt in the dough keeps it tender."
@@ -203,6 +209,7 @@
 						{
 							"id": "flour-tortillas",
 							"label": "Flour tortillas",
+							"name": "flour tortillas",
 							"definition": "Thin rounds without yeast, cooked in a dry pan.",
 							"detail": [
 								"The dough is flour, fat, salt and warm water, rested and then rolled as thin as it will go. Each one cooks in under a minute."
@@ -217,6 +224,7 @@
 						{
 							"id": "bagels",
 							"label": "Bagels",
+							"name": "bagels",
 							"definition": "Rings of dough boiled briefly, then baked.",
 							"detail": [
 								"The boil sets the outside before the oven does, which is where the chew and the shine come from."
@@ -225,6 +233,7 @@
 						{
 							"id": "soft-pretzels",
 							"label": "Soft pretzels",
+							"name": "soft pretzels",
 							"definition": "Knots of dough dipped in an alkaline bath before baking.",
 							"detail": [
 								"The bath, lye in a bakery and baking soda at home, is what turns the crust deep brown and gives it its taste."
@@ -238,7 +247,7 @@
 					{
 						"id": "made",
 						"type": "single_choice",
-						"label": "Have you made {{item.label}}?",
+						"label": "Have you made {{item.name}}?",
 						"options": [
 							{ "id": "never", "label": "Never made it" },
 							{ "id": "once", "label": "Made it once or twice" },
@@ -252,7 +261,7 @@
 					{
 						"id": "stopped-why",
 						"type": "multiple_choice",
-						"label": "Why did you stop making {{item.label}}? Choose all that fit.",
+						"label": "Why did you stop making {{item.name}}? Choose all that fit.",
 						"showIf": { "question": "made", "is": "stopped" },
 						"options": [
 							{ "id": "time", "label": "It took too long" },
@@ -271,7 +280,7 @@
 					{
 						"id": "again",
 						"type": "single_choice",
-						"label": "Would you make {{item.label}} again?",
+						"label": "Would you make {{item.name}} again?",
 						"showIf": { "question": "made", "is": "stopped" },
 						"options": [
 							{ "id": "yes", "label": "Yes, when I have the time" },
@@ -282,7 +291,7 @@
 					{
 						"id": "recipe-fix",
 						"type": "short_text",
-						"label": "What would a better recipe for {{item.label}} have to fix?",
+						"label": "What would a better recipe for {{item.name}} have to fix?",
 						"showIf": { "question": "again", "is": "recipe" }
 					}
 				],

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parseDefinition } from "../src";
 import { problemsOf, questionsSection, repeatSection, teaForm, valid } from "./forms";
@@ -12,11 +12,16 @@ describe("a valid definition", () => {
 		expect(teas?.type === "repeat" && teas.block.followUps).toEqual([]);
 	});
 
-	it("is what the example in the repository is", () => {
-		const example = JSON.parse(
-			readFileSync(new URL("../../../examples/home-baking.json", import.meta.url), "utf8"),
-		);
-		expect(problemsOf(example)).toEqual([]);
+	it("is what every example in the repository is", () => {
+		const examples = new URL("../../../examples/", import.meta.url);
+		const files = readdirSync(examples).filter((name) => name.endsWith(".json"));
+		expect(files).toContain("home-baking.json");
+		for (const file of files) {
+			const example = JSON.parse(readFileSync(new URL(file, examples), "utf8"));
+			expect(problemsOf(example), file).toEqual([]);
+			// A form's file is named after its id, so that its address can be read off the folder.
+			expect(`${example.id}.json`).toBe(file);
+		}
 	});
 });
 

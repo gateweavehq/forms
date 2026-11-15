@@ -1,0 +1,34 @@
+{
+	"version": 1,
+	"id": "quick-feedback",
+	"title": "Two questions about this page",
+	"sections": [
+		{
+			"type": "questions",
+			"id": "feedback",
+			"title": "Your view",
+			"text": [
+				"A made-up form of the shortest kind: no consent step, and one question that needs an answer."
+			],
+			"questions": [
+				{
+					"id": "found",
+					"type": "single_choice",
+					"label": "Did you find what you came for?",
+					"required": true,
+					"options": [
+						{ "id": "yes", "label": "Yes" },
+						{ "id": "partly", "label": "Partly" },
+						{ "id": "no", "label": "No" }
+					]
+				},
+				{
+					"id": "missing",
+					"type": "long_text",
+					"label": "What was missing?",
+					"showIf": { "question": "found", "isNot": "yes" }
+				}
+			]
+		}
+	]
+}
