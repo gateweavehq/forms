@@ -55,8 +55,8 @@ async function read(started: Started) {
 
 const complete = (started: Started) => post(`/api/responses/${started.id}/complete`, {}, started);
 
-describe("completing a response whose answers were changed on the way", () => {
-	it("removes the answers to questions the person was, in the end, not asked", async () => {
+describe("a response whose answers were changed on the way", () => {
+	it("loses the answers to questions the person is no longer asked, as soon as the change is saved", async () => {
 		const started = await start();
 		// Rye: stopped, with its follow-ups answered. Then the status is changed back.
 		await save(started, "made", { option: "stopped" }, "rye-bread");
@@ -75,16 +75,20 @@ describe("completing a response whose answers were changed on the way", () => {
 		await save(started, "starter-age", 2);
 		await save(started, "starter", { option: "no" });
 
-		// While the response is open, all of it is still there: changing back brings it back.
+		// Without finishing: what hung on the old answers went when the new ones were saved.
+		// Someone who leaves now has not left "No oven for a year" behind under a bread they
+		// say they never made.
 		const open = await read(started);
-		expect(Object.keys(open.answers.items["rye-bread"] ?? {}).sort()).toEqual([
-			"again",
-			"made",
-			"recipe-fix",
-			"stopped-why",
-			"stopped-why-other",
-		]);
-		expect(open.answers.questions["starter-age"]?.value).toBe(2);
+		expect(open.completed).toBe(false);
+		expect(Object.keys(open.answers.items["rye-bread"] ?? {})).toEqual(["made"]);
+		expect(Object.keys(open.answers.items.pita ?? {}).sort()).toEqual(["made", "stopped-why"]);
+		expect(open.answers.questions["starter-age"]).toBeUndefined();
+		const before = await forms.db
+			.prepare("SELECT question_id, item_id FROM answer WHERE response_id = ?")
+			.bind(started.id)
+			.all();
+		expect(before.results).toHaveLength(4);
+		expect(JSON.stringify(before.results)).not.toContain("recipe-fix");
 
 		expect((await complete(started)).status).toBe(200);
 		const done = await read(started);
@@ -101,6 +105,39 @@ describe("completing a response whose answers were changed on the way", () => {
 			.all();
 		expect(results).toHaveLength(4);
 		expect(JSON.stringify(results)).not.toContain("recipe-fix");
+	});
+
+	it("removes at completion a row that got past that, however it did", async () => {
+		const started = await start();
+		await save(started, "made", { option: "never" }, "naan");
+		// As a row from before this rule, or from two requests at once, would be.
+		await forms.db
+			.prepare(
+				"INSERT INTO answer (response_id, question_id, item_id, value, active_ms, changes, updated_at) VALUES (?, 'recipe-fix', 'naan', '\"The heat\"', 900, 0, 1)",
+			)
+			.bind(started.id)
+			.run();
+		expect((await complete(started)).status).toBe(200);
+		expect((await read(started)).answers.items.naan).toEqual({
+			made: { value: { option: "never" }, activeMs: 500, changes: 0 },
+		});
+	});
+
+	it("leaves alone what a saved answer does not close", async () => {
+		const started = await start();
+		await save(started, "made", { option: "stopped" }, "brioche");
+		await save(started, "again", { option: "recipe" }, "brioche");
+		await save(started, "recipe-fix", "Less butter", "brioche");
+		// Another bread's status, and a question no rule looks at.
+		await save(started, "made", { option: "never" }, "pita");
+		await save(started, "years", 3);
+		// The same status again, and another answer that still opens the same question.
+		await save(started, "made", { option: "stopped" }, "brioche");
+		expect(Object.keys((await read(started)).answers.items.brioche ?? {}).sort()).toEqual([
+			"again",
+			"made",
+			"recipe-fix",
+		]);
 	});
 
 	it("keeps every answer the final flow contains, a passed one included", async () => {

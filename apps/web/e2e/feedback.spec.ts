@@ -43,7 +43,9 @@ test("says so when a form does not exist", async ({ page }) => {
 	await expect(page.getByRole("heading", { name: "There is no such form" })).toBeVisible();
 });
 
-test("lists the forms on the first page", async ({ page }) => {
+test("lists the example forms on the first page, where the server serves them", async ({
+	page,
+}) => {
 	await page.goto("/");
 	await expect(page.getByRole("heading", { level: 1, name: "Gateweave Forms" })).toBeVisible();
 	await page.getByRole("link", { name: "Bread at home" }).click();

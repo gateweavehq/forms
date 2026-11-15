@@ -40,11 +40,56 @@ export function formatProblems(problems: Problem[]): string {
  * not only the first, so a file can be fixed in one pass.
  */
 export function parseDefinition(input: unknown): ParseResult {
+	// Before the shape is read: reading it walks the input, and input nested without end (a
+	// rule inside a rule, ten thousand times) would run that walk out of stack.
+	if (nestedDeeperThan(input, MAX_NESTING)) {
+		return {
+			ok: false,
+			problems: [
+				{
+					where: "the form",
+					message: `Something in this definition is nested more than ${MAX_NESTING} levels deep. Nothing a form needs goes that far: a rule that combines rules that combine rules can be written flat, with one "all" or "any".`,
+				},
+			],
+		};
+	}
 	const parsed = definitionSchema.safeParse(input);
 	if (!parsed.success) return { ok: false, problems: shapeProblems(input, parsed.error) };
 	const problems = checkDefinition(parsed.data);
 	return problems.length > 0 ? { ok: false, problems } : { ok: true, definition: parsed.data };
 }
+
+/**
+ * How deep a definition may nest, counting every object and list from the definition itself.
+ * A rule four combinations deep sits at level ten; no form made by hand comes near this.
+ */
+export const MAX_NESTING = 32;
+
+/** Whether a value holds objects or lists inside one another more than `limit` deep. */
+function nestedDeeperThan(input: unknown, limit: number): boolean {
+	// With a list of what is left to look at, not by calling itself: the point is to survive
+	// input that a function calling itself would not.
+	const left: Array<[value: unknown, depth: number]> = [[input, 1]];
+	for (let next = left.pop(); next; next = left.pop()) {
+		const [value, depth] = next;
+		if (typeof value !== "object" || value === null) continue;
+		if (depth > limit) return true;
+		for (const inner of Object.values(value)) left.push([inner, depth + 1]);
+	}
+	return false;
+}
+
+/**
+ * Ids a question cannot have: the wide export names its own columns so (`response`, `device`
+ * and the rest), and a question's column is named by its id.
+ */
+export const RESERVED_QUESTION_IDS = [
+	"response",
+	"device",
+	"started",
+	"completed",
+	"active_seconds",
+] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -161,6 +206,13 @@ export function checkDefinition(definition: Definition): Problem[] {
 	const visit = (question: Question, where: string, place: Omit<QuestionPlace, "order">) => {
 		questionIds.push(question.id);
 		const inBlock = place.part !== undefined;
+
+		if ((RESERVED_QUESTION_IDS as readonly string[]).includes(question.id)) {
+			problems.push({
+				where,
+				message: `"${question.id}" cannot be a question's id: the export of responses has a column of that name for every form. Reserved are ${RESERVED_QUESTION_IDS.join(", ")}.`,
+			});
+		}
 
 		for (const [kind, ids] of innerIds(question)) {
 			for (const id of repeated(ids)) {
@@ -295,6 +347,18 @@ export function checkDefinition(definition: Definition): Problem[] {
 				message: `The ${kind} id "${id}" is used more than once. Answers are stored under these ids, so each ${kind} in the form needs its own.`,
 			});
 		}
+	}
+
+	// An item's questions are exported as `<item>.<question>` and a question's options as
+	// `<question>.<option>`, so an id that is both an item's and a question's could name two
+	// columns the same.
+	const items = new Set(itemIds);
+	for (const id of new Set(questionIds)) {
+		if (!items.has(id)) continue;
+		problems.push({
+			where: "the form",
+			message: `"${id}" is the id of an item and of a question. In the export of responses the two could name the same column: give one of them another id.`,
+		});
 	}
 
 	return problems;

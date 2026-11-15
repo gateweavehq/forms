@@ -6,8 +6,9 @@ import tailwindcss from "@tailwindcss/vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
+import { devSecrets } from "./scripts/dev-secrets";
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
 	resolve: { tsconfigPaths: true },
 	plugins: [
 		cloudflare({
@@ -16,13 +17,39 @@ export default defineConfig({
 			viteEnvironment: { name: "ssr" },
 			// The browser tests keep their data apart from `pnpm dev` (see e2e/server.mjs).
 			persistState: process.env.FORMS_STATE_DIR ? { path: process.env.FORMS_STATE_DIR } : true,
+			config: (config) => {
+				// The example forms are served from their files in local development and in the
+				// build the browser tests run against (e2e/build.mjs), and nowhere else.
+				const examples =
+					command === "serve" || process.env.FORMS_E2E
+						? { vars: { ...config.vars, FORMS_EXAMPLES: "1" } }
+						: {};
+				if (command !== "serve") return examples;
+				// In dev only: `secrets.required` would drop the optional settings in .dev.vars.
+				return {
+					secrets: { required: devSecrets(config.secrets?.required ?? [], devVarsKeys()) },
+					...examples,
+				};
+			},
 		}),
 		tailwindcss(),
 		tanstackStart(),
 		viteReact(),
 		rootDeployConfig(),
 	],
-});
+}));
+
+/** The names (never the values) of the keys .dev.vars sets to something. */
+function devVarsKeys(): Set<string> {
+	try {
+		const text = readFileSync(new URL("../../.dev.vars", import.meta.url), "utf8");
+		return new Set(
+			[...text.matchAll(/^\s*([A-Z0-9_]+)\s*=\s*\S/gm)].map((match) => match[1] ?? ""),
+		);
+	} catch {
+		return new Set();
+	}
+}
 
 /**
  * Wrangler finds the build output through .wrangler/deploy/config.json, which the Cloudflare

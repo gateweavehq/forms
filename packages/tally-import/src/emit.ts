@@ -1,4 +1,10 @@
-import type { Condition, DefinitionInput, Paragraph, RichText } from "@gateweave/forms-schema";
+import {
+	type Condition,
+	type DefinitionInput,
+	type Paragraph,
+	RESERVED_QUESTION_IDS,
+	type RichText,
+} from "@gateweave/forms-schema";
 import { type FoldedRun, NAME } from "./fold";
 import { Ids } from "./ids";
 import type { RawCondition, RawQuestion } from "./read";
@@ -50,7 +56,8 @@ export class Emitter {
 	readonly #sections = new Ids();
 	readonly #groups = new Ids();
 	readonly #items = new Ids();
-	readonly #questions = new Ids();
+	// A question titled "Device" would otherwise get the id of one of the export's own columns.
+	readonly #questions = new Ids(RESERVED_QUESTION_IDS);
 	readonly #named = new Map<RawQuestion, Named>();
 	readonly notes = new Set<string>();
 

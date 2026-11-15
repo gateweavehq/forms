@@ -7,14 +7,13 @@ import {
 	detachedQuestions,
 	detachedQuestionsShown,
 	emptyAnswers,
-	flow,
 	isAnswered,
-	isAsking,
 	isChoices,
-	itemOf,
 	placesOf,
 	type Question,
 	type ResponseAnswers,
+	reachedAnswers,
+	referencedQuestions,
 	unansweredRequired,
 	withAnswer,
 } from "@gateweave/forms-schema";
@@ -227,6 +226,25 @@ export async function saveProgress(
 		return;
 	}
 	const checked = checkAnswer(definition, progress.answer);
+	// An answer that other questions' rules look at can close them. What was answered under
+	// them is taken back with it, here and now: a person who changes "stopped" to "never" has
+	// withdrawn why they stopped, whether or not they go on to finish. Kept until completion,
+	// it would sit in the results of every response that was not finished.
+	const stale = ruledBy(definition).has(checked.questionId)
+		? reachedAnswers(
+				definition,
+				withAnswer(
+					await readAnswers(db, row.id),
+					checked.questionId,
+					checked.itemId === "" ? undefined : checked.itemId,
+					{
+						value: checked.value === null ? null : (JSON.parse(checked.value) as AnswerValue),
+						activeMs: 0,
+						changes: 0,
+					},
+				),
+			).unreached
+		: [];
 	// Written as SQL, because the insert has to be conditional too and Drizzle's cannot be.
 	// SQLite evaluates every right-hand side of the update against the row as it was.
 	const d1 = db.$client;
@@ -248,9 +266,31 @@ export async function saveProgress(
 			WHERE id = ?1 AND completed_at IS NULL`,
 		)
 		.bind(row.id, now, progress.position ?? null);
+	const taken = stale.map(({ questionId, itemId }) =>
+		d1
+			.prepare(
+				`DELETE FROM answer WHERE response_id = ?1 AND question_id = ?2 AND item_id = ?3
+				AND EXISTS (SELECT 1 FROM response WHERE id = ?1 AND completed_at IS NULL)`,
+			)
+			.bind(row.id, questionId, itemId),
+	);
 	// Together or not at all: an answer without its place would resume one step behind.
-	const [, placed] = await d1.batch([upsert, place]);
+	const [, placed] = await d1.batch([upsert, place, ...taken]);
 	if (placed?.meta.changes === 0) throw new Refusal(409, "This response is complete.");
+}
+
+/** For each definition, the ids of the questions some other question's rule looks at. */
+const ruled = new WeakMap<Definition, Set<string>>();
+
+function ruledBy(definition: Definition): Set<string> {
+	const known = ruled.get(definition);
+	if (known) return known;
+	const found = new Set<string>();
+	for (const { question } of placesOf(definition).questions.values()) {
+		if (question.showIf) for (const id of referencedQuestions(question.showIf)) found.add(id);
+	}
+	ruled.set(definition, found);
+	return found;
 }
 
 /**
@@ -271,21 +311,9 @@ export async function completeResponse(
 		});
 	}
 
-	// What the person ended up being asked, as (item, question).
-	const asked = new Set(
-		flow(definition, answers)
-			.filter(isAsking)
-			.map((step) => `${itemOf(step) ?? ""} ${step.questionId}`),
-	);
-	const stale: Array<{ questionId: string; itemId: string }> = [];
-	for (const [questionId] of Object.entries(answers.questions)) {
-		if (!asked.has(` ${questionId}`)) stale.push({ questionId, itemId: "" });
-	}
-	for (const [itemId, own] of Object.entries(answers.items)) {
-		for (const questionId of Object.keys(own)) {
-			if (!asked.has(`${itemId} ${questionId}`)) stale.push({ questionId, itemId });
-		}
-	}
+	// The same rule a saved answer applies, asked once more: rows written before that rule
+	// existed, or by a request that raced another, must not outlive completion.
+	const stale = reachedAnswers(definition, answers).unreached;
 
 	const now = Date.now();
 	await db.batch([
@@ -295,15 +323,8 @@ export async function completeResponse(
 			.update(response)
 			.set({ completedAt: now, updatedAt: now })
 			.where(and(eq(response.id, row.id), isNull(response.completedAt))),
-		/*
-		 * Answers to questions the final flow does not contain are removed, not kept with a
-		 * mark. The person changed an earlier answer, and with it took back what hung on it:
-		 * "why did you stop?" under an item they then said they never made. While the response
-		 * was open those rows stayed, so that changing the answer back brought them back. In a
-		 * finished response they are answers to questions that were not asked. Kept and
-		 * marked, every export and every count would have to remember the mark; one that
-		 * forgot would report them as given.
-		 */
+		// Deleted, not kept with a mark: a mark is something every export and every count
+		// would have to remember, and one that forgot would report them as given.
 		...stale.map(({ questionId, itemId }) =>
 			db
 				.delete(answer)
@@ -316,6 +337,24 @@ export async function completeResponse(
 				),
 		),
 	]);
+}
+
+/**
+ * Deletes a response that is not complete, with its answers: the person takes back what they
+ * gave. A completed one is the study's from then on, and only whoever runs the form removes it.
+ */
+export async function withdrawResponse(db: Database, row: ResponseRow): Promise<void> {
+	const refusal = new Refusal(
+		409,
+		"This response is complete, so it cannot be withdrawn here. Ask whoever sent you the form to delete it.",
+	);
+	if (row.completedAt !== null) throw refusal;
+	// "Still open" is asked again by the statement itself: a request that completes the response
+	// can arrive between the check above and this. The answers go with their response.
+	const removed = await db
+		.delete(response)
+		.where(and(eq(response.id, row.id), isNull(response.completedAt)));
+	if (removed.meta.changes === 0) throw refusal;
 }
 
 /** A random key for a row whose order of arrival must not be stored. Fits a JavaScript number. */

@@ -11,6 +11,7 @@ import { strings } from "#/lib/strings";
 import { Button } from "./button";
 import { QuestionInput } from "./inputs";
 import { RichTextView } from "./rich-text";
+import { consentAddress } from "./your-answers";
 
 /**
  * What a person sees once their response is complete: the form's thanks, and the questions
@@ -24,12 +25,15 @@ export function EndPage({
 	definition,
 	askDetached,
 	children,
+	version,
 }: {
 	definition: Definition;
 	/** Whether the person finished just now, in this page. */
 	askDetached: boolean;
 	/** What follows the thanks and the detached questions: the person's own answers to look over. */
 	children?: ReactNode;
+	/** Names the wording the response began under, for the copy of its consent. */
+	version: string;
 }) {
 	const heading = useRef<HTMLHeadingElement>(null);
 	useEffect(() => {
@@ -53,6 +57,16 @@ export function EndPage({
 			)}
 			{hasDetached && <DetachedForm definition={definition} />}
 			{children}
+			{definition.consent && (
+				<a
+					href={consentAddress(definition.id, version)}
+					target="_blank"
+					rel="noopener"
+					className="inline-flex min-h-11 items-center self-start text-sm text-muted-foreground underline underline-offset-4"
+				>
+					{strings.yours.consentCopy}
+				</a>
+			)}
 		</main>
 	);
 }
@@ -60,7 +74,9 @@ export function EndPage({
 function DetachedForm({ definition }: { definition: Definition }) {
 	const [drafts, setDrafts] = useState<Record<string, Draft>>({});
 	const [problems, setProblems] = useState<Record<string, string>>({});
-	const [state, setState] = useState<"open" | "sending" | "failed" | "busy" | "sent">("open");
+	const [state, setState] = useState<"open" | "sending" | "failed" | "busy" | "sent" | "closed">(
+		"open",
+	);
 	const id = useId();
 
 	const values: Record<string, AnswerValue | null> = {};
@@ -91,14 +107,17 @@ function DetachedForm({ definition }: { definition: Definition }) {
 			await sendDetached(definition.id, answers);
 			setState("sent");
 		} catch (error) {
-			setState(error instanceof RequestFailed && error.status === 429 ? "busy" : "failed");
+			const status = error instanceof RequestFailed ? error.status : 0;
+			// The form was closed after this person finished. Their response is stored; this
+			// part is not, and trying again would not change that, so it is said and not offered.
+			setState(status === 404 ? "closed" : status === 429 ? "busy" : "failed");
 		}
 	};
 
-	if (state === "sent") {
+	if (state === "sent" || state === "closed") {
 		return (
 			<p role="status" className="rounded-lg border px-4 py-3 font-medium">
-				{strings.end.sent}
+				{state === "sent" ? strings.end.sent : strings.end.detachedClosed}
 			</p>
 		);
 	}

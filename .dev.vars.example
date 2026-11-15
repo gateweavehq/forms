@@ -1,0 +1,14 @@
+# Copied to .dev.vars by `pnpm dev:setup`, which also fills in a random secret.
+# Optional settings stay commented out. Uncomment one to use it.
+
+# Signs the sessions of the people who run forms. Generate with: openssl rand -base64 32
+BETTER_AUTH_SECRET=
+
+# Optional: pins the app's URL. Leave it out to accept any host, for example from your phone.
+# BETTER_AUTH_URL=
+
+# Optional: who may make an account, as whole addresses separated by commas. An entry that
+# names a domain (@example.org) is ignored: no email is sent yet, so nothing proves who can
+# read mail there. A listed address belongs to whoever signs up with it first.
+# Without it, anyone who reaches the server can sign up.
+# SIGN_UP_ALLOW=you@example.com, colleague@example.org

@@ -4,17 +4,30 @@ import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { RequestFailed, startResponse } from "#/lib/client";
 import { cn } from "#/lib/cn";
 import { deviceClass } from "#/lib/device";
-import { rememberedResponse, rememberResponse, type SavedResponse } from "#/lib/local";
+import {
+	forgetResponse,
+	rememberedResponse,
+	rememberResponse,
+	type SavedResponse,
+} from "#/lib/local";
 import { strings } from "#/lib/strings";
 import { Button } from "./button";
 import { MadeWith } from "./card-frame";
 import { RichTextView } from "./rich-text";
+import { consentAddress } from "./your-answers";
 
 /**
  * A form's first page: its title, and its consent when it has one. Nothing is stored and no
  * question is shown until the person agrees and starts; that is when their response is made.
  */
-export function StartPage({ definition }: { definition: Definition }) {
+export function StartPage({
+	definition,
+	closed = false,
+}: {
+	definition: Definition;
+	/** The form takes no new responses. One already begun on this device can still be finished. */
+	closed?: boolean;
+}) {
 	const navigate = useNavigate();
 	const { consent } = definition;
 	const [problem, setProblem] = useState<string>();
@@ -88,13 +101,38 @@ export function StartPage({ definition }: { definition: Definition }) {
 						{saved && (
 							<section className="flex flex-col gap-1 rounded-lg bg-accent px-4 py-3">
 								<h2 className="font-semibold">{strings.start.resumeTitle}</h2>
-								<p className="text-sm text-muted-foreground">{strings.start.startOver}</p>
+								{!closed && (
+									<p className="text-sm text-muted-foreground">{strings.start.startOver}</p>
+								)}
+								<Button
+									variant="outline"
+									className="mt-2 self-start bg-card"
+									onClick={() => {
+										forgetResponse(definition.id);
+										setSaved(undefined);
+									}}
+								>
+									{strings.start.forget}
+								</Button>
+								<p className="text-sm text-muted-foreground">{strings.start.forgetNote}</p>
 							</section>
 						)}
-						{consent ? (
+						{closed ? (
+							<p role="status" className="font-medium">
+								{strings.start.closed}
+							</p>
+						) : consent ? (
 							<>
 								{consent.title && <h2 className="text-xl font-semibold">{consent.title}</h2>}
 								<RichTextView text={consent.text} />
+								<a
+									href={consentAddress(definition.id)}
+									target="_blank"
+									rel="noopener"
+									className="inline-flex min-h-11 items-center self-start text-sm text-muted-foreground underline underline-offset-4"
+								>
+									{strings.start.consentCopy}
+								</a>
 								<label className="flex min-h-12 cursor-pointer items-start gap-3 rounded-lg border border-input bg-card px-4 py-3 has-checked:border-foreground has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-ring">
 									{/* Its state stays in the box itself, so a tick made before the script ran counts. */}
 									<input
@@ -117,8 +155,10 @@ export function StartPage({ definition }: { definition: Definition }) {
 						)}
 					</div>
 					<MadeWith className="sm:hidden" />
+					{/* A closed form with nothing begun on this device has nothing to press. */}
 					<div
 						data-bar
+						hidden={closed && !saved}
 						className="card-bar -mx-2 flex flex-col gap-2 bg-page px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:mx-0 sm:flex-row-reverse sm:justify-start sm:gap-3 sm:bg-transparent sm:px-0 sm:pt-4 sm:pb-0"
 					>
 						{saved && (
@@ -130,7 +170,7 @@ export function StartPage({ definition }: { definition: Definition }) {
 								{strings.start.resume}
 							</Button>
 						)}
-						{startButton}
+						{!closed && startButton}
 					</div>
 					<MadeWith className="mt-6 max-sm:hidden" />
 				</form>

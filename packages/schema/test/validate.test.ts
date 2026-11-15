@@ -350,3 +350,52 @@ describe("parseDefinition", () => {
 		}
 	});
 });
+
+describe("a definition nested without end", () => {
+	const nested = (levels: number) => {
+		let rule: unknown = { question: "drinks", is: "yes" };
+		for (let level = 0; level < levels; level++) rule = { not: rule };
+		const form = teaForm();
+		const cups = questionsSection(form, "you").questions[1];
+		if (!cups) throw new Error("The form has no second question");
+		cups.showIf = rule as typeof cups.showIf;
+		return form;
+	};
+
+	it("is refused with one problem, however deep it goes, and never by running out of stack", () => {
+		for (const levels of [40, 5_000, 200_000]) {
+			const result = parseDefinition(nested(levels));
+			expect(result.ok).toBe(false);
+			expect(result.ok ? [] : result.problems).toEqual([
+				{ where: "the form", message: expect.stringContaining("nested more than 32 levels") },
+			]);
+		}
+	});
+
+	it("is fine as deep as a rule written by hand goes", () => {
+		// "not" twenty times over is silly, and valid.
+		expect(problemsOf(nested(20))).toEqual([]);
+	});
+});
+
+describe("an id the export needs for itself", () => {
+	it("cannot be a question's", () => {
+		for (const id of ["response", "device", "started", "completed", "active_seconds"]) {
+			const form = teaForm();
+			const [first] = questionsSection(form, "you").questions;
+			if (!first) throw new Error("The form has no question");
+			first.id = id;
+			expect(problemsOf(form).join("\n"), id).toContain(`"${id}" cannot be a question's id`);
+		}
+	});
+
+	it("cannot be both an item's and a question's, whose columns would be named alike", () => {
+		const form = teaForm();
+		const [first] = repeatSection(form, "teas").groups[0]?.items ?? [];
+		if (!first) throw new Error("The form has no item");
+		first.id = "additions";
+		expect(problemsOf(form).join("\n")).toContain(
+			'"additions" is the id of an item and of a question',
+		);
+	});
+});

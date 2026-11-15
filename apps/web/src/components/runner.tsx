@@ -8,6 +8,7 @@ import {
 	mergeItem,
 	placesOf,
 	type ResponseAnswers,
+	reachedAnswers,
 	withAnswer,
 } from "@gateweave/forms-schema";
 import { Link } from "@tanstack/react-router";
@@ -160,6 +161,7 @@ function Answering({
 	const [answers, setAnswers] = useState<ResponseAnswers>(initial.answers);
 	const [position, setPosition] = useState<string | undefined>(initial.position ?? undefined);
 	const [completed, setCompleted] = useState(initial.completed);
+	const [withdrawn, setWithdrawn] = useState(false);
 	const [finishing, setFinishing] = useState<"no" | "sending" | "failed">("no");
 	const [failing, setFailing] = useState(false);
 	const [refused, setRefused] = useState(false);
@@ -223,9 +225,12 @@ function Answering({
 		preferAutoAdvance(on);
 	};
 
+	if (withdrawn) {
+		return <Notice title={strings.yours.withdrawnTitle}>{strings.yours.withdrawnBody}</Notice>;
+	}
 	if (completed) {
 		return (
-			<EndPage definition={definition} askDetached={!initial.completed}>
+			<EndPage definition={definition} askDetached={!initial.completed} version={initial.version}>
 				<AnswersSummary definition={definition} answers={answers} />
 				<MadeWith className="mt-auto pt-6" />
 			</EndPage>
@@ -264,7 +269,9 @@ function Answering({
 			clock.current?.take();
 		}
 
-		// The answer just given may open or close cards after this one, never before it.
+		// The answer just given may open or close cards after this one, never before it. What
+		// was answered under a card it closed is taken back, as the server does on saving it.
+		nextAnswers = reachedAnswers(definition, nextAnswers).answers;
 		const nextCards = deckOf(flow(definition, nextAnswers));
 		const here = nextCards.findIndex((candidate) => candidate.key === card.key);
 		const find = (key: string | undefined) =>
@@ -472,6 +479,13 @@ function Answering({
 						formId={definition.id}
 						responseId={responseId}
 						secret={secret}
+						version={initial.version}
+						hasConsent={definition.consent !== undefined}
+						onWithdrawn={() => {
+							// Nothing more is sent for a response that is gone.
+							queue.current?.stop();
+							setWithdrawn(true);
+						}}
 					/>
 				</header>
 				{initial.formChanged && (

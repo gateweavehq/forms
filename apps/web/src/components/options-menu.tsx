@@ -2,14 +2,16 @@ import { useEffect, useId, useRef, useState } from "react";
 import { cn } from "#/lib/cn";
 import { strings } from "#/lib/strings";
 import { ContinueElsewhere, type ElsewhereHandle } from "./continue-elsewhere";
+import { YourAnswers, type YourAnswersHandle } from "./your-answers";
 
 const row =
 	"flex min-h-11 w-full cursor-pointer touch-manipulation items-center gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-accent";
 
 /**
  * The few things a person may want to set while answering, behind one button in the header, so
- * that they are not on every card: whether cards move on by themselves, and the address that
- * continues on another device.
+ * that they are not on every card: whether cards move on by themselves, the address that
+ * continues on another device, and what they can do about their own answers (keep the consent
+ * they gave, make this browser forget the way back, take everything back).
  *
  * It is a button that shows a small panel, not an ARIA menu: what is in it is a checkbox and a
  * button, and those keep their own roles and keys. Escape, a press outside it, and the focus
@@ -20,17 +22,25 @@ export function OptionsMenu({
 	formId,
 	responseId,
 	secret,
+	version,
+	hasConsent,
+	onWithdrawn,
 }: {
 	/** The switch for moving on by itself. Absent in a form that has no cards that do. */
 	autoAdvance: { on: boolean; set: (on: boolean) => void } | undefined;
 	formId: string;
 	responseId: string;
 	secret: string;
+	/** Names the wording the response began under, for the copy of its consent. */
+	version: string;
+	hasConsent: boolean;
+	onWithdrawn: () => void;
 }) {
 	const [open, setOpen] = useState(false);
 	const root = useRef<HTMLDivElement>(null);
 	const button = useRef<HTMLButtonElement>(null);
 	const elsewhere = useRef<ElsewhereHandle>(null);
+	const yours = useRef<YourAnswersHandle>(null);
 	const panelId = useId();
 
 	useEffect(() => {
@@ -111,6 +121,16 @@ export function OptionsMenu({
 				>
 					{strings.elsewhere.open}
 				</button>
+				<button
+					type="button"
+					className={row}
+					onClick={() => {
+						setOpen(false);
+						yours.current?.open();
+					}}
+				>
+					{strings.yours.open}
+				</button>
 			</div>
 			{/* Outside the panel: the panel is hidden while the dialog it opened is up. */}
 			<ContinueElsewhere
@@ -118,6 +138,16 @@ export function OptionsMenu({
 				formId={formId}
 				responseId={responseId}
 				secret={secret}
+				onClose={() => button.current?.focus()}
+			/>
+			<YourAnswers
+				ref={yours}
+				formId={formId}
+				responseId={responseId}
+				secret={secret}
+				version={version}
+				hasConsent={hasConsent}
+				onWithdrawn={onWithdrawn}
 				onClose={() => button.current?.focus()}
 			/>
 		</div>

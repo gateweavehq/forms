@@ -31,7 +31,12 @@ export function slug(text: string): string {
 
 /** Hands out ids that are unique within one scope, numbering the ones that would repeat. */
 export class Ids {
-	readonly #used = new Set<string>();
+	readonly #used: Set<string>;
+
+	/** `reserved` are ids this scope may not hand out, as if they were taken already. */
+	constructor(reserved: Iterable<string> = []) {
+		this.#used = new Set(reserved);
+	}
 
 	/** An id for this label, or for `fallback` when the label has no letters or digits. */
 	take(label: string, fallback: string): string {

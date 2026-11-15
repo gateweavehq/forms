@@ -96,24 +96,132 @@ The report says what the source held, what each section became and what was chan
 
 | Address                           | What it is                                                      |
 | --------------------------------- | --------------------------------------------------------------- |
-| `/`                               | Lists the forms this server has                                 |
+| `/`                               | A way in for the people who run forms. Lists no forms           |
 | `/f/<form>`                       | The form's title and consent. Starting makes the response       |
 | `/f/<form>/r/<response>#<secret>` | The cards. Opening this address anywhere continues the response |
+| `/f/<form>/consent`               | The consent text on its own, to print or keep                   |
+| `/login`, `/account`              | Signing in and up, and the account                              |
+| `/forms`, `/forms/new`            | A person's forms, and bringing one in                           |
+| `/forms/<form>`                   | Its results: overview, items, questions, responses, kept apart  |
+| `/forms/<form>/settings`          | Opening and closing, versions, a new definition, deleting       |
 
-Forms are the files in `examples/`, read when the Worker is built (`src/server/forms.ts`).
+A form is a row in `form` that belongs to one account. Its id is what its address carries, so
+it never changes; its wording changes by pointing at a newer definition. An id is free only
+when no form has it and nothing was ever answered under it: responses can outlive their form,
+and whoever took the id next would otherwise be shown them. It is a `draft` (its
+link says it is not open), `open`, or `closed` (no new responses; those begun can finish).
+
+The files in `examples/` are served only where `FORMS_EXAMPLES` is `"1"`, which development and
+the tests set. On a deployment a form exists because someone brought it in.
 
 ### API
 
-| Request                             | Does                                                       |
-| ----------------------------------- | ---------------------------------------------------------- |
-| `POST /api/forms/<form>/responses`  | Starts a response. Returns its id and secret, once         |
-| `GET /api/responses/<id>`           | The answers so far, the position, whether it is complete   |
-| `POST /api/responses/<id>/progress` | Stores one answer as it is given, and the new position     |
-| `POST /api/responses/<id>/complete` | Closes the response. Refused while a required one is empty |
-| `POST /api/forms/<form>/detached`   | Stores the answers a form keeps apart                      |
+| Request                             | Does                                                        |
+| ----------------------------------- | ----------------------------------------------------------- |
+| `POST /api/forms/<form>/responses`  | Starts a response. Returns its id and secret, once          |
+| `GET /api/responses/<id>`           | The answers so far, the position, whether it is complete    |
+| `POST /api/responses/<id>/progress` | Stores one answer as it is given, and the new position      |
+| `POST /api/responses/<id>/complete` | Closes the response. Refused while a required one is empty  |
+| `DELETE /api/responses/<id>`        | Withdraws a response that is not complete, with its answers |
+| `POST /api/forms/<form>/detached`   | Stores the answers a form keeps apart                       |
 
-The three under `/api/responses` need `Authorization: Bearer <secret>`. A wrong secret and an
+The four under `/api/responses` need `Authorization: Bearer <secret>`. A wrong secret and an
 unknown id get the same 404. Bodies are JSON, checked with zod, at most 64 KB.
+
+The owner's addresses are under `/api/owner`, and need a session:
+
+| Request                                         | Does                                              |
+| ----------------------------------------------- | ------------------------------------------------- |
+| `POST /api/owner/preview`                       | Says what a definition or Tally page would become |
+| `POST /api/owner/forms`                         | Brings a form in, as a draft                      |
+| `POST /api/owner/forms/<form>/definition`       | Gives it a new definition                         |
+| `POST /api/owner/forms/<form>/state`            | Opens or closes it                                |
+| `GET /api/owner/forms/<form>/export/<name>`     | `responses.csv`, `codebook.csv`, `detached.csv`   |
+| `DELETE /api/owner/forms/<form>/responses`      | Deletes every response, and what is kept apart    |
+| `DELETE /api/owner/forms/<form>/responses/<id>` | Deletes one response                              |
+
+Bodies there may be up to 4 MB, because a Tally form's page data runs to a megabyte or two.
+
+### Accounts, and who may see results
+
+The people who run forms sign in with an email address and a password (Better Auth, set up as
+in Gateweave Guard). Respondents never do. The two sides do not meet: nothing under `/f/` or
+the respondent's API reads a session, and nothing on the owner's side takes a response's secret.
+
+- **One place decides ownership.** `ownedForm` in `server/owner.ts` returns a form's row only to
+  the account it belongs to. Every owner page, server function and address starts there, and the
+  functions that read responses take that row, not an id.
+- **"Not found" is one answer.** A missing form, someone else's, and a request with no session
+  get the same response. `test/ownership.test.ts` asks every page and address as another
+  account and as nobody, and compares the bytes with what a missing form gets.
+- **A change must come from the app's own pages.** The session cookie is `SameSite=Lax`, which
+  keeps it off the POSTs other sites start in current browsers. Every request that is not a GET
+  must carry the app's own `Origin` as well, so that this does not rest on one browser default.
+- **Sessions hold nothing about the device.** Better Auth's columns for the network address and
+  the user agent are stored empty, and its own limiter is off.
+- **Tries are counted three ways** through Rate Limiting bindings, before Better Auth sees the
+  request:
+  - _Per email address tried_ (`AUTH_LIMIT`, ten a minute), for signing in and signing up. This
+    is what stops guessing at one account's password, wherever the guesses come from. It has a
+    cost that should be known: someone who keeps trying a known address holds its owner out of
+    signing in for as long as they keep at it.
+  - _Per account_ (the same binding), for changing a password, which asks for the current one
+    and would otherwise be a way to guess at it with a stolen session.
+  - _Per sender_ (`AUTH_SENDER_LIMIT`, thirty a minute), for every request to `/api/auth/*`
+    that is not a read, so that one sender cannot go through a list of addresses. This is the
+    one place the Worker reads a network address (`CF-Connecting-IP`). It is the key of that
+    counter and nothing else: not stored, not logged, and never read for anything a respondent
+    sends.
+- **Who may make an account** is `SIGN_UP_ALLOW`: whole email addresses. Without it anyone
+  can, so a deployment should set it. Two things follow from there being no email yet, so that
+  no address can be verified:
+  - An entry that names a domain (`@example.org`) is **ignored**, and the log says so once. It
+    would admit anyone who types an address at that domain. A list of nothing but domains
+    admits nobody.
+  - A listed address belongs to **whoever signs up with it first**. Sign up straight after
+    listing an address, and list no address whose owner will not.
+
+  With the list set, an address that is not on it and one that is on it and already has an
+  account get the same answer, so the list cannot be read off by trying addresses.
+
+There is no email yet, so no password reset and no verification of an address. `/update-user`
+is switched off: no page uses it, and it would store a picture's address.
+
+### Results (`packages/results`)
+
+Results are worked out in a package with no storage in it, from a definition and the responses
+to it, so that the numbers a study will quote can be checked by hand: its tests run over eight
+made-up responses with the working written beside them.
+
+- **Per version.** A response belongs to the definition it began under, and the same question
+  id can mean something else in another, so results are never added up across two. Each page
+  names the version it shows and how many responses that is.
+- **Seen and answered.** A question that was shown and left empty is stored with no value. Its
+  summary gives both counts, and every share is out of those who answered.
+- **Active time** is the time questions were on screen in a visible tab, added up. Medians are
+  of completed responses.
+- **Where people stopped** is, for each unfinished response, the last question of its own
+  flow that it answered or passed, by part of the form and question by question. It is worked
+  out from the answers the server holds. The position a browser saves is not used: it is the
+  browser's word, and it moves when someone only looks back.
+- **Signals** mark what is worth a second look and prove nothing: a completed response under
+  30% of the median active time, and a group where three or more items got the same status.
+- **Filters** are a device class and one answer of a single-choice question asked once. They
+  travel in the page's address.
+- **The wide export** has one row per response and one column per thing asked, an item's
+  questions under `<item>.<question>`; the codebook says what each column and value means. A
+  cell that begins with `=`, `+`, `-` or `@` gets a leading apostrophe: answers are typed by
+  strangers, and a spreadsheet would run them for the person who opens the file.
+- **What is kept apart** has its own page and its own export, and never appears beside a
+  response. Both answer only once the form is **closed** and holds **at least five** such rows,
+  and give them in an order drawn anew on every read; before that the page says why, and how
+  many are missing. The reasons are under "What an operator or an owner could still infer".
+- **Taken-back answers are left out.** Everything in the package reads a response through
+  `reached`, which keeps only what the response's own flow asks. The server removes such rows
+  itself (see Storage); the results do not rely on that.
+
+A page reads every response of the version it shows. That is fine for the hundreds a study
+gets; a form with many thousands would want its counts kept as they change.
 
 ### Limits on the open addresses
 
@@ -129,7 +237,8 @@ things stand in the way of a flood, and a third is planned:
   so it is a ceiling and not an exact count.
 - **At Cloudflare's edge, a rule per address**, which the operator sets and the Worker never
   sees: a WAF rate-limiting rule on `POST /api/forms/*` (for example, a few requests a minute
-  from one address). This is what stops one sender without stopping everyone, and it keeps the
+  from one address), and one on `POST /api/auth/*` (for example, twenty a minute). The second
+  backs up the Worker's own count per sender, and stops a flood before it costs a request. This is what stops one sender without stopping everyone, and it keeps the
   address out of the Worker, its tables and its logs. It is not part of this repository: a
   deployment without it has the ceiling only.
 - **Later, Turnstile on Start**, so that a response is started by a browser a person is using.
@@ -143,12 +252,29 @@ things stand in the way of a flood, and a third is planned:
 - `answer`: one row per response, question and item, with the value as JSON, the active time and
   the number of changes. The server counts a change in the statement that writes the answer.
 - `detached_answer`: a random key, the form id and the answers. Nothing else.
+- `form`: id, the owning account, title, state, the hash of the definition new responses start
+  under, and when it was created and updated.
+- `user`, `session`, `account`, `verification`: Better Auth's tables, for the people who run
+  forms. Deleting a `user` row deletes their `form` rows and leaves the responses, and the app
+  has no way to delete an account yet.
 
-While a response is open, an answer stays stored even when a later change hides its question:
-changing back brings it back. **At completion, answers to questions the final flow does not
-contain are deleted.** They were taken back with the answer they hung on, and a finished
-response should hold what was asked and nothing else. Deleting was chosen over marking because
-a mark is something every export and count would have to remember.
+**An answer to a question the flow no longer asks is deleted when the answer that closed the
+question is saved.** Someone who changes "stopped" to "never" has taken back why they stopped,
+whether or not they go on to finish; kept until completion, it would sit in the results of
+exactly the responses that were not finished. The page drops it from its own copy at the same
+moment, so changing the answer back asks the follow-up again, empty. Completion applies the
+rule once more, for a row that got past it. Deleting was chosen over marking because a mark is
+something every export and count would have to remember. The rule is one function,
+`reachedAnswers` in `packages/schema`, used by the server, the page and the results.
+
+A definition is stored as one row and may weigh at most 1 MB (D1 takes no row above 2 MB); a
+larger one is refused before anything is stored. One nested more than 32 levels deep is
+refused before its shape is read. A question's id may not be one of the export's own column
+names (`response`, `device`, `started`, `completed`, `active_seconds`), nor an item's id.
+
+"Deleted" means removed from the database as it is now. D1 keeps 30 days of history (Time
+Travel), from which whoever runs the deployment can restore the database as it was. The app
+says so wherever it deletes.
 
 A response is checked against the definition it started under, for as long as it is open, and
 the page asks that definition's questions: when the form has changed since, `GET
@@ -169,25 +295,45 @@ questions they were given to, so the results side will read them against the sam
   own numbering is the order of arrival, which would pair each row with the response completed
   just before it.
 
-### What an operator could still infer
+### What an operator or an owner could still infer
 
 "Stored without anything that names your response" is what the storage gives, and the app, the
-docs and the examples promise no more than that. It is not unlinkability. Whoever runs the
-deployment, or reads its database, could still pair a detached answer with a response:
+docs and the examples promise no more than that. It is not unlinkability. Two kinds of people
+could try to pair a detached answer with a response, and they can do different things.
 
-- **By counting, on a small sample.** If one response is complete and one detached row exists,
-  they belong together. The same goes for the first few of any study.
-- **By time, through D1's history.** A response's `completed_at` is stored to the millisecond,
+**The form's owner** sees responses arrive, each with its time of completion. A list of
+detached answers that grew beside them would pair every row with the response completed just
+before it. So the owner is shown them, on the page and in the export, only when the form is
+closed and holds at least five, in an order drawn anew on every read, and a row is accepted
+only while the form is open. What remains for an owner:
+
+- **Counting, on a very small study.** Five rows among five completed responses are those five
+  people's, whatever the order. The threshold keeps one row from being one person; it does not
+  make a handful of people a crowd.
+- **Reopening and closing.** An owner who closes a form, looks, opens it again and closes it
+  after the next completion sees one row more than before, and the rows are few enough to
+  compare. Nothing stops this. It takes intent, and it leaves the form's state changes behind
+  as the only trace.
+
+The number of kept-apart rows is not said while a form is open either: the settings page and
+its delete dialog say only that such answers, if there are any, are removed too. A number that
+went up just after a completion would say that this person left something.
+
+**Whoever runs the deployment**, or reads its database, has all of that and more:
+
+- **Time, through D1's history.** A response's `completed_at` is stored to the millisecond,
   and its detached answer arrives seconds later. The row carries no time, but D1 keeps 30 days
   of history (Time Travel): the database as it was at a given moment can be restored, which
   shows when a row first existed. Compared with completion times, that pairs rows with
   responses whenever completions are not close together.
-- **By Cloudflare's own records of requests**, to whatever extent the account keeps any. The
+- **Cloudflare's own records of requests**, to whatever extent the account keeps any. The
   Worker's invocation logs are off; the two requests still came from one connection.
+- **The table itself**, without the threshold or the shuffle, which are the app's and not the
+  database's.
 
-Closing the second would take holding detached answers back and writing them in shuffled
-batches, so that a row's first appearance says nothing about one response. That is not built.
-A study that needs more than "not named" should collect contact details somewhere else.
+Closing the first of those would take holding detached answers back and writing them in
+shuffled batches, so that a row's first appearance says nothing about one response. That is not
+built. A study that needs more than "not named" should collect contact details somewhere else.
 
 ### Why the cards behave as they do
 
@@ -262,9 +408,10 @@ the browser's bundle. A test reads the built bundle to hold that.
 
 ## Not built yet
 
-These are seams, not features: the builder, sign-in, results and export, embedding, the public
-API and webhooks, email, a second layout for comparison, and deployment. Three things a
-deployment needs first are also open:
+These are seams, not features: the builder, teams and sharing a form's results, signing in
+through Gateweave ID, email (and with it password reset), embedding, the public API and
+webhooks, a second layout for comparison, and deleting a form or an account from the app.
 
-- **Erasing.** A study must be able to export its responses and then delete them.
-- **Withdrawal.** A response's address could let its owner delete it.
+Withdrawing covers a response that is not complete. A completed one is deleted by the form's
+owner, who cannot tell which response is whose: a respondent who wants theirs removed has to
+give the owner its address or its id.
