@@ -76,9 +76,8 @@ silently.
    no timers, no points. The table in `docs/architecture.md` gives the reason for each; change
    one only with evidence, and say which.
 7. **Accessible by construction.** Radios and checkboxes are real inputs. Number keys act only
-   while focus is inside the card. Every control a finger can press is at least 44 pixels in both
-   directions, and nothing scrolls sideways at 320 pixels. Each new card takes the focus at its
-   heading.
+   while focus is inside the card. Every control is at least 44 pixels in both directions, and
+   nothing scrolls sideways at 320 pixels. Each new card takes the focus at its heading.
 8. **Server code never reaches the browser bundle.** In routes and server functions, import
    server modules dynamically inside the handler, as `apps/web/src/lib/forms.ts` does.
 9. **Other people's forms stay out of the repository.** A real questionnaire belongs to its
