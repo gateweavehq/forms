@@ -139,6 +139,12 @@ things stand in the way of a flood, and a third is planned:
   the number of changes. The server counts a change in the statement that writes the answer.
 - `detached_answer`: a random key, the form id and the answers. Nothing else.
 
+While a response is open, an answer stays stored even when a later change hides its question:
+changing back brings it back. **At completion, answers to questions the final flow does not
+contain are deleted.** They were taken back with the answer they hung on, and a finished
+response should hold what was asked and nothing else. Deleting was chosen over marking because
+a mark is something every export and count would have to remember.
+
 A response is checked against the definition it started under, for as long as it is open, and
 the page asks that definition's questions: when the form has changed since, `GET
 /api/responses/<id>` sends the stored definition along. Answers only mean something against the

@@ -7,15 +7,18 @@ import {
 	detachedQuestions,
 	detachedQuestionsShown,
 	emptyAnswers,
+	flow,
 	isAnswered,
+	isAsking,
 	isChoices,
+	itemOf,
 	placesOf,
 	type Question,
 	type ResponseAnswers,
 	unansweredRequired,
 	withAnswer,
 } from "@gateweave/forms-schema";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { Database } from "./db";
 import { answer, definition as definitions, detachedAnswer, response } from "./db/schema";
 import type { Form } from "./forms";
@@ -208,38 +211,46 @@ export async function saveProgress(
 		throw new Refusal(400, "This is not a place in a form.");
 	}
 	const now = Date.now();
+	// "Still open" is asked again inside each statement. The check above read the row a moment
+	// ago, and a request that completes the response can arrive between the two: a completed
+	// response must not change, whichever of them the database runs first.
 	const touch = db
 		.update(response)
 		.set({
 			updatedAt: now,
 			...(progress.position === undefined ? {} : { position: progress.position }),
 		})
-		.where(eq(response.id, row.id));
+		.where(and(eq(response.id, row.id), isNull(response.completedAt)));
 	if (!progress.answer) {
-		await touch;
+		const touched = await touch;
+		if (touched.meta.changes === 0) throw new Refusal(409, "This response is complete.");
 		return;
 	}
 	const checked = checkAnswer(definition, progress.answer);
-	const upsert = db
-		.insert(answer)
-		.values({
-			responseId: row.id,
-			...checked,
-			activeMs: progress.answer.activeMs,
-			updatedAt: now,
-		})
-		.onConflictDoUpdate({
-			target: [answer.responseId, answer.questionId, answer.itemId],
-			// SQLite evaluates every right-hand side against the row as it was.
-			set: {
-				changes: sql`${answer.changes} + (CASE WHEN ${answer.value} IS NOT NULL AND ${answer.value} IS NOT excluded.value THEN 1 ELSE 0 END)`,
-				value: sql`excluded.value`,
-				activeMs: sql`${answer.activeMs} + excluded.active_ms`,
-				updatedAt: sql`excluded.updated_at`,
-			},
-		});
+	// Written as SQL, because the insert has to be conditional too and Drizzle's cannot be.
+	// SQLite evaluates every right-hand side of the update against the row as it was.
+	const d1 = db.$client;
+	const upsert = d1
+		.prepare(
+			`INSERT INTO answer (response_id, question_id, item_id, value, active_ms, changes, updated_at)
+			SELECT ?1, ?2, ?3, ?4, ?5, 0, ?6
+			WHERE EXISTS (SELECT 1 FROM response WHERE id = ?1 AND completed_at IS NULL)
+			ON CONFLICT (response_id, question_id, item_id) DO UPDATE SET
+				changes = answer.changes + (CASE WHEN answer.value IS NOT NULL AND answer.value IS NOT excluded.value THEN 1 ELSE 0 END),
+				value = excluded.value,
+				active_ms = answer.active_ms + excluded.active_ms,
+				updated_at = excluded.updated_at`,
+		)
+		.bind(row.id, checked.questionId, checked.itemId, checked.value, progress.answer.activeMs, now);
+	const place = d1
+		.prepare(
+			`UPDATE response SET updated_at = ?2, position = COALESCE(?3, position)
+			WHERE id = ?1 AND completed_at IS NULL`,
+		)
+		.bind(row.id, now, progress.position ?? null);
 	// Together or not at all: an answer without its place would resume one step behind.
-	await db.batch([upsert, touch]);
+	const [, placed] = await d1.batch([upsert, place]);
+	if (placed?.meta.changes === 0) throw new Refusal(409, "This response is complete.");
 }
 
 /**
@@ -252,17 +263,59 @@ export async function completeResponse(
 	row: ResponseRow,
 ): Promise<void> {
 	if (row.completedAt !== null) return;
-	const missing = unansweredRequired(definition, await readAnswers(db, row.id));
+	const answers = await readAnswers(db, row.id);
+	const missing = unansweredRequired(definition, answers);
 	if (missing.length > 0) {
 		throw new Refusal(422, "Some questions that need an answer have none.", {
 			missing: missing.map((step) => step.key),
 		});
 	}
+
+	// What the person ended up being asked, as (item, question).
+	const asked = new Set(
+		flow(definition, answers)
+			.filter(isAsking)
+			.map((step) => `${itemOf(step) ?? ""} ${step.questionId}`),
+	);
+	const stale: Array<{ questionId: string; itemId: string }> = [];
+	for (const [questionId] of Object.entries(answers.questions)) {
+		if (!asked.has(` ${questionId}`)) stale.push({ questionId, itemId: "" });
+	}
+	for (const [itemId, own] of Object.entries(answers.items)) {
+		for (const questionId of Object.keys(own)) {
+			if (!asked.has(`${itemId} ${questionId}`)) stale.push({ questionId, itemId });
+		}
+	}
+
 	const now = Date.now();
-	await db
-		.update(response)
-		.set({ completedAt: now, updatedAt: now })
-		.where(and(eq(response.id, row.id)));
+	await db.batch([
+		// Only if it is still open: of two requests to complete, one does it and the other
+		// changes nothing, so the time of completion is never moved.
+		db
+			.update(response)
+			.set({ completedAt: now, updatedAt: now })
+			.where(and(eq(response.id, row.id), isNull(response.completedAt))),
+		/*
+		 * Answers to questions the final flow does not contain are removed, not kept with a
+		 * mark. The person changed an earlier answer, and with it took back what hung on it:
+		 * "why did you stop?" under an item they then said they never made. While the response
+		 * was open those rows stayed, so that changing the answer back brought them back. In a
+		 * finished response they are answers to questions that were not asked. Kept and
+		 * marked, every export and every count would have to remember the mark; one that
+		 * forgot would report them as given.
+		 */
+		...stale.map(({ questionId, itemId }) =>
+			db
+				.delete(answer)
+				.where(
+					and(
+						eq(answer.responseId, row.id),
+						eq(answer.questionId, questionId),
+						eq(answer.itemId, itemId),
+					),
+				),
+		),
+	]);
 }
 
 /** A random key for a row whose order of arrival must not be stored. Fits a JavaScript number. */
