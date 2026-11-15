@@ -110,6 +110,25 @@ Forms are the files in `examples/`, read when the Worker is built (`src/server/f
 The three under `/api/responses` need `Authorization: Bearer <secret>`. A wrong secret and an
 unknown id get the same 404. Bodies are JSON, checked with zod, at most 64 KB.
 
+### Limits on the open addresses
+
+Starting a response and storing a detached answer need no secret, so anyone can call them. Two
+things stand in the way of a flood, and a third is planned:
+
+- **In the Worker, a ceiling per form** (`ratelimits` in `wrangler.jsonc`, Cloudflare's Rate
+  Limiting binding): so many starts and so many detached answers a minute, counted with the
+  form's id as the key. Over it, the request is refused with 429 before anything is stored, and
+  the page says to try again in a minute. The Worker reads no network address, so the ceiling
+  cannot tell one sender from another: it keeps the tables from being filled, and a flood can
+  still keep real people out for as long as it lasts. The binding counts per Cloudflare location,
+  so it is a ceiling and not an exact count.
+- **At Cloudflare's edge, a rule per address**, which the operator sets and the Worker never
+  sees: a WAF rate-limiting rule on `POST /api/forms/*` (for example, a few requests a minute
+  from one address). This is what stops one sender without stopping everyone, and it keeps the
+  address out of the Worker, its tables and its logs. It is not part of this repository: a
+  deployment without it has the ceiling only.
+- **Later, Turnstile on Start**, so that a response is started by a browser a person is using.
+
 ### Storage (D1)
 
 - `response`: id, form id, a hash of the definition it was started on, a seal of the secret, the
@@ -164,8 +183,5 @@ These are seams, not features: the builder, sign-in, results and export, embeddi
 API and webhooks, email, a second layout for comparison, and deployment. Three things a
 deployment needs first are also open:
 
-- **Limits on starting responses and on detached answers.** Both addresses are open by design
-  (no account), so they need a rate limit that stores no address, as the siblings' per-client
-  Durable Object does.
 - **Erasing.** A study must be able to export its responses and then delete them.
 - **Withdrawal.** A response's address could let its owner delete it.

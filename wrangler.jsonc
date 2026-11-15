@@ -16,6 +16,16 @@
 	// about who answered has to mean its logs too.
 	"observability": { "enabled": true, "logs": { "invocation_logs": false } },
 	"upload_source_maps": true,
+	// Ceilings on the two addresses that need no secret: starting a response and storing a detached
+	// answer. Each is counted per form, never per client: the Worker reads no network address.
+	// A ceiling stops a flood from filling the tables; it cannot tell one sender from another,
+	// which is the job of a rate-limiting rule at Cloudflare's edge (docs/architecture.md).
+	// The numbers are per Cloudflare location and per minute. `namespace_id` only has to be
+	// unique within the account.
+	"ratelimits": [
+		{ "name": "START_LIMIT", "namespace_id": "4770", "simple": { "limit": 120, "period": 60 } },
+		{ "name": "DETACHED_LIMIT", "namespace_id": "4771", "simple": { "limit": 60, "period": 60 } }
+	],
 	// Responses: one row per response, one per answer, and the answers a form keeps apart.
 	"d1_databases": [
 		{

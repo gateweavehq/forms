@@ -88,6 +88,15 @@ async function answering(handler: () => Promise<Response>): Promise<Response> {
 	}
 }
 
+/**
+ * Counts one more use of an open address against its form's ceiling. The key is the form, not
+ * the sender: nothing about who asks is read here.
+ */
+async function withinCeiling(limiter: RateLimit, formId: string, busy: string): Promise<void> {
+	const { success } = await limiter.limit({ key: formId });
+	if (!success) throw new Refusal(429, busy);
+}
+
 async function formOf(id: string) {
 	const form = await findForm(id);
 	if (!form) throw new Refusal(404, "There is no such form.");
@@ -105,6 +114,11 @@ export function startResponse(request: Request, formId: string): Promise<Respons
 	return answering(async () => {
 		const form = await formOf(formId);
 		const body = await readBody(request, createBody);
+		await withinCeiling(
+			env.START_LIMIT,
+			form.definition.id,
+			"Many people are starting this form right now. Try again in a minute.",
+		);
 		if (form.definition.consent && body.consent !== true) {
 			throw new Refusal(400, "This form starts once its consent is given.");
 		}
@@ -155,6 +169,11 @@ export function postDetached(request: Request, formId: string): Promise<Response
 	return answering(async () => {
 		const form = await formOf(formId);
 		const body = await readBody(request, detachedBody);
+		await withinCeiling(
+			env.DETACHED_LIMIT,
+			form.definition.id,
+			"Many people are sending this right now. Try again in a minute.",
+		);
 		await saveDetached(createDb(env.DB), form, body.answers);
 		return json({ stored: true }, 201);
 	});

@@ -49,3 +49,21 @@ test("lists the forms on the first page", async ({ page }) => {
 	await page.getByRole("link", { name: "Bread at home" }).click();
 	await expect(page.getByRole("heading", { level: 1, name: "Bread at home" })).toBeVisible();
 });
+
+test("says so when the form's ceiling on new responses is reached, and starts on the next try", async ({
+	page,
+}) => {
+	// The server's refusal, as it answers when a form is being started too often.
+	await page.route("**/api/forms/quick-feedback/responses", (route) =>
+		route.fulfill({ status: 429, json: { error: "Too many" } }),
+	);
+	await page.goto("/f/quick-feedback");
+	await expect(page.getByRole("button", { name: "Start" })).toBeEnabled();
+	await page.getByRole("button", { name: "Start" }).click();
+	await expect(page.getByRole("alert")).toHaveText(
+		"Many people are starting this form right now. Wait a minute and press Start again.",
+	);
+	await page.unroute("**/api/forms/quick-feedback/responses");
+	await page.getByRole("button", { name: "Start" }).click();
+	await expect(heading(page, "Your view")).toBeVisible();
+});

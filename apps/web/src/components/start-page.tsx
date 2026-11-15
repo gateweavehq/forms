@@ -1,7 +1,7 @@
 import type { Definition } from "@gateweave/forms-schema";
 import { useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useEffect, useId, useRef, useState } from "react";
-import { startResponse } from "#/lib/client";
+import { RequestFailed, startResponse } from "#/lib/client";
 import { deviceClass } from "#/lib/device";
 import { rememberedResponse, rememberResponse, type SavedResponse } from "#/lib/local";
 import { strings } from "#/lib/strings";
@@ -54,9 +54,10 @@ export function StartPage({ definition }: { definition: Definition }) {
 			);
 			rememberResponse(definition.id, started);
 			await open(started);
-		} catch {
+		} catch (error) {
 			setStarting(false);
-			setProblem(strings.start.failed);
+			const busy = error instanceof RequestFailed && error.status === 429;
+			setProblem(busy ? strings.start.busy : strings.start.failed);
 		}
 	};
 

@@ -5,7 +5,7 @@ import {
 	detachedQuestionsShown,
 } from "@gateweave/forms-schema";
 import { type FormEvent, useEffect, useId, useRef, useState } from "react";
-import { sendDetached } from "#/lib/client";
+import { RequestFailed, sendDetached } from "#/lib/client";
 import { type Draft, fromDraft, toDraft } from "#/lib/draft";
 import { strings } from "#/lib/strings";
 import { Button } from "./button";
@@ -56,7 +56,7 @@ export function EndPage({
 function DetachedForm({ definition }: { definition: Definition }) {
 	const [drafts, setDrafts] = useState<Record<string, Draft>>({});
 	const [problems, setProblems] = useState<Record<string, string>>({});
-	const [state, setState] = useState<"open" | "sending" | "failed" | "sent">("open");
+	const [state, setState] = useState<"open" | "sending" | "failed" | "busy" | "sent">("open");
 	const id = useId();
 
 	const values: Record<string, AnswerValue | null> = {};
@@ -86,8 +86,8 @@ function DetachedForm({ definition }: { definition: Definition }) {
 		try {
 			await sendDetached(definition.id, answers);
 			setState("sent");
-		} catch {
-			setState("failed");
+		} catch (error) {
+			setState(error instanceof RequestFailed && error.status === 429 ? "busy" : "failed");
 		}
 	};
 
@@ -135,9 +135,9 @@ function DetachedForm({ definition }: { definition: Definition }) {
 					</div>
 				);
 			})}
-			{state === "failed" && (
+			{(state === "failed" || state === "busy") && (
 				<p role="alert" className="font-medium text-destructive">
-					{strings.end.sendFailed}
+					{state === "busy" ? strings.end.sendBusy : strings.end.sendFailed}
 				</p>
 			)}
 			<Button type="submit" className="self-start" disabled={state === "sending"}>

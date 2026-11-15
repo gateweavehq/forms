@@ -29,7 +29,16 @@ function builtModules(): V4ModuleDefinition[] {
  * The built Worker in workerd, as deployed, with its D1 database migrated and no network: every
  * outbound request fails, and Forms makes none. Requests go in through `fetch`.
  */
-export async function startForms(origin = "https://forms.test") {
+export async function startForms({
+	origin = "https://forms.test",
+	startsPerMinute = 10_000,
+	detachedPerMinute = 10_000,
+}: {
+	origin?: string;
+	/** The ceilings on the two open addresses. High unless a test is about them. */
+	startsPerMinute?: number;
+	detachedPerMinute?: number;
+} = {}) {
 	const config = JSON.parse(readFileSync(join(serverDir, "wrangler.json"), "utf8")) as BuiltConfig;
 	const logs: WorkerLog[] = [];
 	const outbound: string[] = [];
@@ -47,6 +56,13 @@ export async function startForms(origin = "https://forms.test") {
 					compatibilityDate: config.compatibility_date,
 					compatibilityFlags: config.compatibility_flags,
 					d1Databases: { DB: "forms-test" },
+					ratelimits: {
+						START_LIMIT: { namespace_id: "1", simple: { limit: startsPerMinute, period: 60 } },
+						DETACHED_LIMIT: {
+							namespace_id: "2",
+							simple: { limit: detachedPerMinute, period: 60 },
+						},
+					},
 					outboundService: (request: Request) => {
 						outbound.push(request.url);
 						return new Response("Outbound requests are blocked in this test", { status: 502 });

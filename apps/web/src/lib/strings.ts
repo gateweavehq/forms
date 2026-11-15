@@ -27,6 +27,8 @@ export const strings = {
 		/** Shown when the consent's box is not ticked. */
 		consentNeeded: "Tick the box to take part.",
 		failed: "The form could not be started. Check your connection and try again.",
+		/** The form's ceiling on new responses a minute was reached. */
+		busy: "Many people are starting this form right now. Wait a minute and press Start again.",
 		resumeTitle: "You started this form on this device",
 		resume: "Continue where you stopped",
 		startOver: "Or start again from the beginning below.",
@@ -121,6 +123,7 @@ export const strings = {
 			"What you enter here is stored apart from your answers, with nothing that links the two.",
 		send: "Send",
 		sendFailed: "This could not be sent. Check your connection and try again.",
+		sendBusy: "Many people are sending this right now. Wait a minute and press Send again.",
 		sent: "Sent. Thank you.",
 	},
 };
