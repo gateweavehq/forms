@@ -356,7 +356,7 @@ test("keeps the detached answer apart from the response", async ({ page }) => {
 
 	await expect(heading(page, "Thank you")).toBeVisible();
 	await expect(
-		page.getByText("stored apart from your answers, without anything that names your response"),
+		page.getByText("What you enter here is stored apart from your answers"),
 	).toBeVisible();
 	// Its own rule still holds: the second question waits for an address.
 	await expect(page.getByText("May we write to you about a follow-up survey?")).toHaveCount(0);
@@ -640,4 +640,59 @@ test("tells the person when the server would not take an answer", async ({ page 
 	await alert.getByRole("button", { name: "OK" }).click();
 	await expect(alert).toHaveCount(0);
 	expect((await stored(page)).answers.questions).not.toHaveProperty("often");
+});
+
+test("lets a single choice and a grid's row go back to no answer", async ({ page }) => {
+	await start(page);
+	await forward(page);
+	// A question card: an answer is given, stored, and then taken back.
+	const clear = page.getByRole("button", { name: "Clear my answer", exact: true });
+	await expect(clear).toHaveCount(0);
+	await choose(page, "Most weeks");
+	await forward(page);
+	await expect
+		.poll(async () => (await stored(page)).answers.questions.often?.value)
+		.toEqual({
+			option: "weekly",
+		});
+	await back(page);
+	await expect(page.getByRole("radio", { name: "Most weeks" })).toBeChecked();
+	await clear.click();
+	await expect(page.getByRole("radio", { name: "Most weeks" })).not.toBeChecked();
+	await expect(clear).toHaveCount(0);
+	// With nothing chosen the card can be passed again, and what is stored is "no answer".
+	await page.getByRole("button", { name: "Skip" }).click();
+	await expect
+		.poll(async () => (await stored(page)).answers.questions.often)
+		.toMatchObject({
+			value: null,
+			changes: 1,
+		});
+
+	// An item's card: clearing does not move on, and the card says Skip again.
+	await skipTo(page, "Nine breads");
+	await page.getByRole("checkbox", { name: "Move on by itself after an answer" }).uncheck();
+	await forward(page);
+	await choose(page, "Never made it");
+	await clear.click();
+	await expect(page.getByRole("radio", { name: "Never made it" })).not.toBeChecked();
+	await expect(heading(page, "Sandwich loaf")).toBeVisible();
+	await expect(page.getByRole("button", { name: "Skip" })).toBeVisible();
+});
+
+test("lets one row of a grid go back to no answer", async ({ page }) => {
+	await start(page);
+	await skipTo(page, "How often do you use each of these?");
+	const scale = page.getByRole("group", { name: "Kitchen scale" });
+	await scale.getByText("Every bake").click();
+	await page.getByRole("group", { name: "Thermometer" }).getByText("Never").click();
+	await page.getByRole("button", { name: "Clear my answer for Kitchen scale" }).click();
+	await expect(scale.getByRole("radio", { name: "Every bake" })).not.toBeChecked();
+	await expect(page.getByRole("button", { name: "Clear my answer for Kitchen scale" })).toHaveCount(
+		0,
+	);
+	await forward(page);
+	await expect
+		.poll(async () => (await stored(page)).answers.questions.tools?.value)
+		.toEqual({ rows: { thermometer: "never" } });
 });

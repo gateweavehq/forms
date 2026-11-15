@@ -152,6 +152,20 @@ function RadioList({
 					</div>
 				);
 			})}
+			{/*
+			 * A radio button, once chosen, can only be swapped for another. Someone who tapped by
+			 * mistake, or decides not to say, needs a way back to no answer: every question can
+			 * be passed, and that has to stay true after a tap.
+			 */}
+			{draft.option !== "" && (
+				<Button
+					variant="ghost"
+					className="self-start"
+					onClick={() => onDraft({ ...draft, option: "" })}
+				>
+					{strings.input.clear}
+				</Button>
+			)}
 		</div>
 	);
 }
@@ -328,7 +342,22 @@ function Grid({
 		<div className="flex flex-col gap-5">
 			{question.rows.map((row) => (
 				<fieldset key={row.id} className="flex min-w-0 flex-col gap-2">
-					<legend className="mb-2 text-base font-medium">{row.label}</legend>
+					<legend className="mb-2 flex min-h-11 w-full items-center justify-between gap-3 text-base font-medium">
+						{row.label}
+						{draft.rows[row.id] !== undefined && (
+							<Button
+								variant="ghost"
+								className="-mr-4 text-sm font-normal"
+								aria-label={strings.input.clearRow(row.label)}
+								onClick={() => {
+									const { [row.id]: _cleared, ...rows } = draft.rows;
+									onDraft({ ...draft, rows });
+								}}
+							>
+								{strings.input.clearRowShort}
+							</Button>
+						)}
+					</legend>
 					{/* Stacked on a phone, where three answers side by side would break their words. */}
 					<div className="flex flex-col gap-2 sm:flex-row">
 						{question.columns.map((column) => (

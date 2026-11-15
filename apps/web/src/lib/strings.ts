@@ -80,6 +80,10 @@ export const strings = {
 		ranked: (rank: number) => `ranked ${rank}`,
 		notRanked: "not ranked",
 		clearRanking: "Clear the order",
+		/** Takes a single choice back to no answer, which radio buttons alone cannot do. */
+		clear: "Clear my answer",
+		clearRow: (row: string) => `Clear my answer for ${row}`,
+		clearRowShort: "Clear",
 	},
 	problem: {
 		required: "This question needs an answer.",
