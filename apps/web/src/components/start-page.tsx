@@ -1,4 +1,4 @@
-import type { Definition } from "@gateweave/forms-schema";
+import { type Definition, withdrawalOf } from "@gateweave/forms-schema";
 import { useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { RequestFailed, startResponse } from "#/lib/client";
@@ -11,6 +11,7 @@ import {
 	type SavedResponse,
 } from "#/lib/local";
 import { strings } from "#/lib/strings";
+import { AboutForm } from "./about-form";
 import { Button } from "./button";
 import { MadeWith } from "./card-frame";
 import { RichTextView } from "./rich-text";
@@ -153,6 +154,14 @@ export function StartPage({
 								{problem}
 							</p>
 						)}
+						{/* On a closed form too: someone who answered may be looking for whom to ask. */}
+						<AboutForm
+							formId={definition.id}
+							controller={definition.controller}
+							withdrawal={withdrawalOf(definition)}
+							closed={closed}
+							className="border-t pt-4"
+						/>
 					</div>
 					<MadeWith className="sm:hidden" />
 					{/* A closed form with nothing begun on this device has nothing to press. */}

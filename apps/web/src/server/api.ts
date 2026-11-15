@@ -8,6 +8,7 @@ import {
 	createResponse,
 	definitionOf,
 	findResponse,
+	mayWithdraw,
 	Refusal,
 	type ResponseRow,
 	readAnswers,
@@ -153,6 +154,9 @@ export function getResponse(request: Request, id: string): Promise<Response> {
 			answers: await readAnswers(db, row.id),
 			position: row.position,
 			completed: row.completedAt !== null,
+			// Whether "take my answers back" would be done if asked now. The page shows the
+			// button by it; the request itself is decided again when it comes.
+			canWithdraw: mayWithdraw(await definitionOf(db, row), form, row.completedAt !== null),
 			// Names the wording the response began under, for a copy of the consent it gave.
 			version: row.definitionHash,
 			// The form was edited since this response began. The response goes on under the
@@ -164,13 +168,32 @@ export function getResponse(request: Request, id: string): Promise<Response> {
 }
 
 /**
- * `DELETE /api/responses/:id`: withdraws a response that is not complete, and deletes its
- * answers. The secret is the only thing that can do this, as it is the only thing that can read.
+ * `DELETE /api/responses/:id`: withdraws a response, and deletes its answers. The secret is the
+ * only thing that can do this, as it is the only thing that can read, and whoever has it can:
+ * a second device with the address is the same person as far as the server can tell.
+ *
+ * A complete response can be taken back while its form is open, when the definition it began
+ * under allows that. One whose form has closed gets the answer a wrong secret and a response
+ * that is not there get, word for word: the address says nothing about a form's state.
  */
 export function deleteResponse(request: Request, id: string): Promise<Response> {
 	return answering(async () => {
 		const row = await responseOf(request, id);
-		await withdrawResponse(createDb(env.DB), row);
+		const db = createDb(env.DB);
+		const outcome = await withdrawResponse(
+			db,
+			await definitionOf(db, row),
+			row,
+			await findForm(row.formId),
+		);
+		if (outcome === "closed") throw new Refusal(404, NOT_FOUND);
+		if (outcome === "complete") {
+			// What a form that lets go of nothing after the end has always answered.
+			throw new Refusal(
+				409,
+				"This response is complete, so it cannot be withdrawn here. Ask whoever runs the form to delete it.",
+			);
+		}
 		return json({ withdrawn: true });
 	});
 }
@@ -195,8 +218,13 @@ export function postComplete(request: Request, id: string): Promise<Response> {
 	return answering(async () => {
 		const row = await responseOf(request, id);
 		const db = createDb(env.DB);
-		await completeResponse(db, await definitionOf(db, row), row);
-		return json({ completed: true });
+		const definition = await definitionOf(db, row);
+		await completeResponse(db, definition, row);
+		return json({
+			completed: true,
+			// For the page that follows, which offers to take the answers back when it may.
+			canWithdraw: mayWithdraw(definition, await findForm(row.formId), true),
+		});
 	});
 }
 

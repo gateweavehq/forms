@@ -281,6 +281,121 @@ describe("a form's state", () => {
 	});
 });
 
+describe("who runs a form", () => {
+	/** The made-up form as an import leaves it: without the line that says who runs it. */
+	function unsigned(id: string) {
+		const { controller: _controller, ...rest } = plantForm(id);
+		return rest;
+	}
+
+	async function ownerWithUnsigned() {
+		const cookie = await signUp(forms);
+		const id = freshId();
+		const created = await call(cookie, "POST", "forms", { definition: unsigned(id) });
+		expect(created.status).toBe(201);
+		return { cookie, id };
+	}
+
+	it("can be left out of a draft, which then cannot be opened, and says what is missing", async () => {
+		const { cookie, id } = await ownerWithUnsigned();
+		expect(await formRow(id)).toMatchObject({ state: "draft" });
+
+		const opened = await call(cookie, "POST", `forms/${id}/state`, { state: "open" });
+		expect(opened.status).toBe(409);
+		expect(JSON.stringify(await opened.json())).toContain("does not say who runs it");
+		expect(await formRow(id)).toMatchObject({ state: "draft" });
+		expect((await start(id)).status).toBe(404);
+
+		const settings = await (await forms.fetch(`/forms/${id}/settings`, as(cookie))).text();
+		expect(settings).toContain("Missing: this form does not say who runs it yet.");
+	});
+
+	it("can be filled in on the settings page, as a new version, after which the form opens", async () => {
+		const { cookie, id } = await ownerWithUnsigned();
+		const before = (await formRow(id)) as { definition_hash: string };
+		const saved = await call(cookie, "POST", `forms/${id}/controller`, {
+			name: "  Made-up Fern Society ",
+			contact: "ferns@example.test",
+		});
+		expect(saved.status).toBe(200);
+		const after = (await formRow(id)) as { definition_hash: string };
+		expect(after.definition_hash).not.toBe(before.definition_hash);
+		const stored = await forms.db
+			.prepare("SELECT json FROM definition WHERE hash = ?")
+			.bind(after.definition_hash)
+			.first<{ json: string }>();
+		// Nothing else of the definition changed.
+		expect(JSON.parse(stored?.json ?? "{}")).toEqual({
+			...unsigned(id),
+			controller: { name: "Made-up Fern Society", contact: "ferns@example.test" },
+		});
+
+		const settings = await (await forms.fetch(`/forms/${id}/settings`, as(cookie))).text();
+		expect(settings).not.toContain("Missing: this form does not say who runs it yet.");
+		expect(settings).toContain('value="Made-up Fern Society"');
+		expect((await call(cookie, "POST", `forms/${id}/state`, { state: "open" })).status).toBe(200);
+		expect(await (await forms.fetch(`/f/${id}`)).text()).toContain("Made-up Fern Society");
+	});
+
+	it("refuses a line that names nobody or gives no way to reach them", async () => {
+		const { cookie, id } = await ownerWithUnsigned();
+		const before = await formRow(id);
+		for (const body of [
+			{ name: "", contact: "ferns@example.test" },
+			{ name: "Made-up Fern Society", contact: "   " },
+			{ name: "Made-up Fern Society" },
+			{ name: "x".repeat(201), contact: "ferns@example.test" },
+		]) {
+			expect((await call(cookie, "POST", `forms/${id}/controller`, body)).status).toBe(400);
+		}
+		expect(await formRow(id)).toEqual(before);
+	});
+
+	it("cannot be taken out of a form that is open", async () => {
+		const { cookie, id } = await ownerWithForm();
+		const before = await formRow(id);
+		const replaced = await call(cookie, "POST", `forms/${id}/definition`, {
+			definition: unsigned(id),
+		});
+		expect(replaced.status).toBe(409);
+		expect(await formRow(id)).toEqual(before);
+
+		// A closed form can lose it, and then cannot be opened again until it is back.
+		await call(cookie, "POST", `forms/${id}/state`, { state: "closed" });
+		expect(
+			(await call(cookie, "POST", `forms/${id}/definition`, { definition: unsigned(id) })).status,
+		).toBe(200);
+		expect((await call(cookie, "POST", `forms/${id}/state`, { state: "open" })).status).toBe(409);
+		expect(await formRow(id)).toMatchObject({ state: "closed" });
+	});
+
+	it("is said before a form is brought in", async () => {
+		const cookie = await signUp(forms);
+		const preview = async (definition: unknown) =>
+			(await (
+				await call(cookie, "POST", "preview", {
+					kind: "definition",
+					text: JSON.stringify(definition),
+				})
+			).json()) as { summary: { controller: unknown; withdrawal: string } };
+		expect((await preview(plantForm(freshId()))).summary).toMatchObject({
+			controller: { name: "Made-up Plant Study", contact: "plant-study@example.org" },
+			withdrawal: "until-closed",
+		});
+		expect((await preview(unsigned(freshId()))).summary.controller).toBeNull();
+		// A Tally form's page has no such line: the import still works, and comes in as a draft.
+		const tally = (await (
+			await call(cookie, "POST", "preview", {
+				kind: "tally",
+				text: JSON.stringify(bakingForm()),
+				id: freshId(),
+			})
+		).json()) as { ok: boolean; summary: { controller: unknown } };
+		expect(tally.ok).toBe(true);
+		expect(tally.summary.controller).toBeNull();
+	});
+});
+
 describe("a new definition", () => {
 	it("is what new responses start under, while one already begun keeps its own", async () => {
 		const { cookie, id } = await ownerWithForm();

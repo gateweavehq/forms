@@ -15,6 +15,12 @@ export const definition = sqliteTable(
 		formId: text("form_id").notNull(),
 		/** The definition, as JSON. */
 		json: text("json").notNull(),
+		/**
+		 * How many responses to this definition were taken back by the people who gave them.
+		 * A number and nothing else: which response, and when, is what withdrawing removes. It
+		 * goes up in the statement batch that deletes the response.
+		 */
+		withdrawn: integer("withdrawn").notNull().default(0),
 	},
 	(table) => [index("definition_form_idx").on(table.formId)],
 );

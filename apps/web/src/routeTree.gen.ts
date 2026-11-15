@@ -21,6 +21,7 @@ import { Route as ApiOwnerSplatRouteImport } from './routes/api/owner/$'
 import { Route as ApiResponsesResponseRouteImport } from './routes/api/responses/$response'
 import { Route as FFormIndexRouteImport } from './routes/f/$form/index'
 import { Route as FFormConsentRouteImport } from './routes/f/$form/consent'
+import { Route as FFormStoredRouteImport } from './routes/f/$form/stored'
 import { Route as FormsFormIndexRouteImport } from './routes/forms/$form/index'
 import { Route as FormsFormDetachedRouteImport } from './routes/forms/$form/detached'
 import { Route as FormsFormItemsRouteImport } from './routes/forms/$form/items'
@@ -92,6 +93,11 @@ const FFormIndexRoute = FFormIndexRouteImport.update({
 const FFormConsentRoute = FFormConsentRouteImport.update({
   id: '/consent',
   path: '/consent',
+  getParentRoute: () => FFormRoute,
+} as any)
+const FFormStoredRoute = FFormStoredRouteImport.update({
+  id: '/stored',
+  path: '/stored',
   getParentRoute: () => FFormRoute,
 } as any)
 const FormsFormIndexRoute = FormsFormIndexRouteImport.update({
@@ -170,6 +176,7 @@ export interface FileRoutesByFullPath {
   '/api/owner/$': typeof ApiOwnerSplatRoute
   '/api/responses/$response': typeof ApiResponsesResponseRouteWithChildren
   '/f/$form/consent': typeof FFormConsentRoute
+  '/f/$form/stored': typeof FFormStoredRoute
   '/forms/$form/detached': typeof FormsFormDetachedRoute
   '/forms/$form/items': typeof FormsFormItemsRoute
   '/forms/$form/questions': typeof FormsFormQuestionsRoute
@@ -194,6 +201,7 @@ export interface FileRoutesByTo {
   '/api/owner/$': typeof ApiOwnerSplatRoute
   '/api/responses/$response': typeof ApiResponsesResponseRouteWithChildren
   '/f/$form/consent': typeof FFormConsentRoute
+  '/f/$form/stored': typeof FFormStoredRoute
   '/forms/$form/detached': typeof FormsFormDetachedRoute
   '/forms/$form/items': typeof FormsFormItemsRoute
   '/forms/$form/questions': typeof FormsFormQuestionsRoute
@@ -221,6 +229,7 @@ export interface FileRoutesById {
   '/api/owner/$': typeof ApiOwnerSplatRoute
   '/api/responses/$response': typeof ApiResponsesResponseRouteWithChildren
   '/f/$form/consent': typeof FFormConsentRoute
+  '/f/$form/stored': typeof FFormStoredRoute
   '/forms/$form/detached': typeof FormsFormDetachedRoute
   '/forms/$form/items': typeof FormsFormItemsRoute
   '/forms/$form/questions': typeof FormsFormQuestionsRoute
@@ -249,6 +258,7 @@ export interface FileRouteTypes {
     | '/api/owner/$'
     | '/api/responses/$response'
     | '/f/$form/consent'
+    | '/f/$form/stored'
     | '/forms/$form/detached'
     | '/forms/$form/items'
     | '/forms/$form/questions'
@@ -273,6 +283,7 @@ export interface FileRouteTypes {
     | '/api/owner/$'
     | '/api/responses/$response'
     | '/f/$form/consent'
+    | '/f/$form/stored'
     | '/forms/$form/detached'
     | '/forms/$form/items'
     | '/forms/$form/questions'
@@ -299,6 +310,7 @@ export interface FileRouteTypes {
     | '/api/owner/$'
     | '/api/responses/$response'
     | '/f/$form/consent'
+    | '/f/$form/stored'
     | '/forms/$form/detached'
     | '/forms/$form/items'
     | '/forms/$form/questions'
@@ -415,6 +427,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FFormConsentRouteImport
       parentRoute: typeof FFormRoute
     }
+    '/f/$form/stored': {
+      id: '/f/$form/stored'
+      path: '/stored'
+      fullPath: '/f/$form/stored'
+      preLoaderRoute: typeof FFormStoredRouteImport
+      parentRoute: typeof FFormRoute
+    }
     '/forms/$form/': {
       id: '/forms/$form/'
       path: '/'
@@ -504,12 +523,14 @@ declare module '@tanstack/react-router' {
 
 interface FFormRouteChildren {
   FFormConsentRoute: typeof FFormConsentRoute
+  FFormStoredRoute: typeof FFormStoredRoute
   FFormIndexRoute: typeof FFormIndexRoute
   FFormRResponseRoute: typeof FFormRResponseRoute
 }
 
 const FFormRouteChildren: FFormRouteChildren = {
   FFormConsentRoute: FFormConsentRoute,
+  FFormStoredRoute: FFormStoredRoute,
   FFormIndexRoute: FFormIndexRoute,
   FFormRResponseRoute: FFormRResponseRoute,
 }

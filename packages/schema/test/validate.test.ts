@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { parseDefinition } from "../src";
+import { parseDefinition, withdrawalOf } from "../src";
 import { problemsOf, questionsSection, repeatSection, teaForm, valid } from "./forms";
 
 describe("a valid definition", () => {
@@ -21,6 +21,51 @@ describe("a valid definition", () => {
 			expect(problemsOf(example), file).toEqual([]);
 			// A form's file is named after its id, so that its address can be read off the folder.
 			expect(`${example.id}.json`).toBe(file);
+		}
+	});
+});
+
+describe("who runs a form, and until when answers can be taken back", () => {
+	it("may both be left out, and a definition that leaves them out is stored as it came", () => {
+		const definition = valid(teaForm());
+		expect(definition).not.toHaveProperty("controller");
+		// Not filled in: a stored definition is named by a hash of its content.
+		expect(definition).not.toHaveProperty("withdrawal");
+		expect(withdrawalOf(definition)).toBe("until-closed");
+	});
+
+	it("are kept when given", () => {
+		const definition = valid({
+			...teaForm(),
+			controller: { name: " Made-up Tea Board ", contact: "tea-board@example.org" },
+			withdrawal: "until-complete",
+		});
+		expect(definition.controller).toEqual({
+			name: "Made-up Tea Board",
+			contact: "tea-board@example.org",
+		});
+		expect(withdrawalOf(definition)).toBe("until-complete");
+	});
+
+	it("refuses a controller without a name or a way to reach them, and a rule there is not", () => {
+		const form = (extra: object) => ({ ...teaForm(), ...extra });
+		expect(problemsOf(form({ controller: { name: "Made-up Tea Board" } }))).toHaveLength(1);
+		expect(problemsOf(form({ controller: { name: "  ", contact: "x@example.org" } }))).toHaveLength(
+			1,
+		);
+		expect(
+			problemsOf(form({ controller: { name: "Made-up Tea Board", contact: "x", phone: "1" } })),
+		).toHaveLength(1);
+		expect(problemsOf(form({ withdrawal: "never" }))).toHaveLength(1);
+	});
+
+	it("every example in the repository names a made-up one", () => {
+		const examples = new URL("../../../examples/", import.meta.url);
+		for (const file of readdirSync(examples).filter((name) => name.endsWith(".json"))) {
+			const example = JSON.parse(readFileSync(new URL(file, examples), "utf8"));
+			// Without one an example could not be opened, and the tests' server opens them all.
+			expect(example.controller?.name, file).toMatch(/made-up/i);
+			expect(example.controller?.contact, file).toMatch(/example\.org|Example Lane/);
 		}
 	});
 });

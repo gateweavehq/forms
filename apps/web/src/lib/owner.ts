@@ -29,13 +29,20 @@ export const getOwnedForm = createServerFn({ method: "GET" })
 	.validator(z.string().min(1).max(64))
 	.handler(async ({ data: id }) => {
 		const { currentUser, db } = await import("#/server/auth");
-		const { holdings, NotFound, ownedForm, versions } = await import("#/server/owner");
+		const { definitionOfVersion, holdings, NotFound, ownedForm, versions } = await import(
+			"#/server/owner"
+		);
+		const { withdrawalOf } = await import("@gateweave/forms-schema");
 		try {
 			const row = await ownedForm(db, await currentUser(), id);
+			const current = await definitionOfVersion(db, row, row.definitionHash);
 			return {
 				id: row.id,
 				title: row.title,
 				state: row.state,
+				/** Who runs it, as its first page says, or null: then it cannot be opened yet. */
+				controller: current?.controller ?? null,
+				withdrawal: withdrawalOf(current ?? {}),
 				versions: await versions(db, row),
 				holds: await holdings(db, row),
 			};

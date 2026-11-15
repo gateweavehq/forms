@@ -89,6 +89,8 @@ const addresses: Array<[method: string, path: string, body?: unknown]> = [
 	["GET", "forms/FORM/export/detached.csv"],
 	["DELETE", "forms/FORM/responses/RESPONSE"],
 	["DELETE", "forms/FORM/responses"],
+	["POST", "forms/FORM/controller", { name: "Someone else", contact: "else@example.test" }],
+	["DELETE", "forms/FORM", { confirm: FORM }],
 ];
 
 describe.each(addresses)("%s /api/owner/%s", (method, path, body) => {
@@ -115,6 +117,12 @@ describe.each(addresses)("%s /api/owner/%s", (method, path, body) => {
 			.bind(FORM)
 			.first<{ n: number }>();
 		expect(kept?.n).toBe(1);
+		// Nor did the form get another definition, such as one that names someone else.
+		const versions = await forms.db
+			.prepare("SELECT count(*) AS n FROM definition WHERE form_id = ?")
+			.bind(FORM)
+			.first<{ n: number }>();
+		expect(versions?.n).toBe(1);
 	});
 });
 
@@ -141,6 +149,8 @@ describe("a change without the app's own Origin", () => {
 		["POST", "forms/FORM/definition", { definition: plantForm(FORM, "Taken over") }],
 		["DELETE", "forms/FORM/responses/RESPONSE", undefined],
 		["DELETE", "forms/FORM/responses", undefined],
+		["POST", "forms/FORM/controller", { name: "Someone else", contact: "else@example.test" }],
+		["DELETE", "forms/FORM", { confirm: FORM }],
 		["POST", "forms", { definition: plantForm("no-origin") }],
 	] as const)("%s /api/owner/%s is not found, and changes nothing", async (method, path, body) => {
 		const response = await forms.fetch(

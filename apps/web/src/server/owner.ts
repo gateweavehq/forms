@@ -1,6 +1,13 @@
-import { type Definition, formatProblems, parseDefinition } from "@gateweave/forms-schema";
+import {
+	type Controller,
+	type Definition,
+	formatProblems,
+	parseDefinition,
+	type Withdrawal,
+	withdrawalOf,
+} from "@gateweave/forms-schema";
 import { type ImportReport, importTally } from "@gateweave/forms-tally-import";
-import { and, count, eq, sql } from "drizzle-orm";
+import { and, count, eq, inArray, notExists, sql } from "drizzle-orm";
 import type { CurrentUser } from "./auth";
 import type { Database } from "./db";
 import {
@@ -9,6 +16,7 @@ import {
 	detachedAnswer,
 	form as forms,
 	response,
+	user as users,
 } from "./db/schema";
 import { examples, type FormState, hashOf, readStored } from "./forms";
 
@@ -75,6 +83,9 @@ export interface DefinitionSummary {
 	id: string;
 	title: string;
 	hasConsent: boolean;
+	/** Who runs the study, as the first page will say it, or nothing when it does not say. */
+	controller: Controller | null;
+	withdrawal: Withdrawal;
 	sections: Array<{
 		title: string;
 		type: "questions" | "repeat";
@@ -88,6 +99,8 @@ export function summarise(definition: Definition): DefinitionSummary {
 		id: definition.id,
 		title: definition.title,
 		hasConsent: definition.consent !== undefined,
+		controller: definition.controller ?? null,
+		withdrawal: withdrawalOf(definition),
 		sections: definition.sections.map((section) =>
 			section.type === "questions"
 				? {
@@ -195,6 +208,20 @@ function checked(input: unknown): Definition {
 }
 
 /**
+ * Why a form with this definition cannot take answers, or nothing when it can. A person who is
+ * asked for answers has to be told who is asking and how to reach them, so a form that does not
+ * say stays a draft. The shape lets it be missing, so that a draft and an import can exist.
+ */
+export function notOpenable(definition: Definition): Refused | undefined {
+	return definition.controller
+		? undefined
+		: new Refused(
+				409,
+				'This form does not say who runs it, so it cannot take answers yet. Add who runs the study and how to reach them, under Settings or as "controller" in the definition.',
+			);
+}
+
+/**
  * Brings a form in as a draft that belongs to this person. Its id has to be free: no form has
  * it, and nothing was ever answered under it. Responses can outlive their form (an example
  * that is no longer served, an account that was removed), and whoever then took the id would
@@ -209,6 +236,10 @@ export async function createForm(
 ): Promise<{ id: string }> {
 	const definition = checked(input);
 	const { id } = definition;
+	if (state === "open") {
+		const refusal = notOpenable(definition);
+		if (refusal) throw refusal;
+	}
 	// The same words whatever holds it: this must not say whose it is, or that answers exist.
 	const taken = new Refused(
 		409,
@@ -281,8 +312,11 @@ export async function replaceDefinition(db: Database, row: FormRow, input: unkno
 			`This definition's id is "${definition.id}", and this form's is "${row.id}". A form keeps its id: change "id" in the definition, or bring it in as a new form.`,
 		);
 	}
+	// An open form's first page must go on saying who runs it.
+	const refusal = row.state === "open" ? notOpenable(definition) : undefined;
+	if (refusal) throw refusal;
 	const hash = await hashOf(definition);
-	await db.batch([
+	const [, replaced] = await db.batch([
 		db
 			.insert(definitions)
 			.values({ hash, formId: row.id, json: JSON.stringify(definition) })
@@ -290,12 +324,53 @@ export async function replaceDefinition(db: Database, row: FormRow, input: unkno
 		db
 			.update(forms)
 			.set({ definitionHash: hash, title: definition.title, updatedAt: Date.now() })
-			.where(eq(forms.id, row.id)),
+			// Asked again by the statement: the form may have been opened since its row was read.
+			.where(
+				and(
+					eq(forms.id, row.id),
+					definition.controller ? undefined : sql`${forms.state} <> 'open'`,
+				),
+			),
 	]);
+	if (replaced.meta.changes === 0) throw notOpenable(definition) ?? new NotFound();
 }
 
+/**
+ * Gives a form the line that says who runs it, by making a definition that differs from the
+ * current one in nothing else. There is no builder, and a form brought in from elsewhere has no
+ * such line, so without this it could never be opened.
+ */
+export async function setController(
+	db: Database,
+	row: FormRow,
+	controller: Controller,
+): Promise<void> {
+	const current = await definitionOfVersion(db, row, row.definitionHash);
+	if (!current) throw new Error("A form's definition is missing");
+	await replaceDefinition(db, row, { ...current, controller });
+}
+
+/** Opens or closes a form. Opening is refused while its definition does not say who runs it. */
 export async function setState(db: Database, row: FormRow, state: FormState): Promise<void> {
-	await db.update(forms).set({ state, updatedAt: Date.now() }).where(eq(forms.id, row.id));
+	if (state === "open") {
+		const current = await definitionOfVersion(db, row, row.definitionHash);
+		if (!current) throw new Error("A form's definition is missing");
+		const refusal = notOpenable(current);
+		if (refusal) throw refusal;
+	}
+	const changed = await db
+		.update(forms)
+		.set({ state, updatedAt: Date.now() })
+		.where(
+			and(
+				eq(forms.id, row.id),
+				// Opened under the definition that was just checked, not one that replaced it since.
+				state === "open" ? eq(forms.definitionHash, row.definitionHash) : undefined,
+			),
+		);
+	if (changed.meta.changes === 0) {
+		throw new Refused(409, "This form was changed in the meantime. Load the page again.");
+	}
 }
 
 /** One version of a form's definition, with how many responses began under it. */
@@ -304,6 +379,11 @@ export interface Version {
 	current: boolean;
 	started: number;
 	completed: number;
+	/**
+	 * How many responses to this version were taken back by the people who gave them, before
+	 * or after finishing. They are in neither of the other two numbers.
+	 */
+	withdrawn: number;
 	title: string;
 }
 
@@ -313,6 +393,7 @@ export async function versions(db: Database, row: FormRow): Promise<Version[]> {
 		.select({
 			hash: definitions.hash,
 			json: definitions.json,
+			withdrawn: definitions.withdrawn,
 			started: count(response.id),
 			completed: sql<number>`count(${response.completedAt})`,
 		})
@@ -322,11 +403,12 @@ export async function versions(db: Database, row: FormRow): Promise<Version[]> {
 		.groupBy(definitions.hash)
 		.all();
 	return rows
-		.map(({ hash, json, started, completed }) => ({
+		.map(({ hash, json, started, completed, withdrawn }) => ({
 			hash,
 			current: hash === row.definitionHash,
 			started,
 			completed,
+			withdrawn,
 			title: readStored(hash, json).title,
 		}))
 		.sort((a, b) => Number(b.current) - Number(a.current) || b.started - a.started);
@@ -392,4 +474,54 @@ export async function deleteAllResponses(db: Database, row: FormRow): Promise<vo
 		db.delete(response).where(eq(response.formId, row.id)),
 		db.delete(detachedAnswer).where(eq(detachedAnswer.formId, row.id)),
 	]);
+}
+
+/**
+ * Deletes a form and everything under its id: every response with its answers, what it kept
+ * apart, the form's row and every definition it has had, the counts of withdrawn responses
+ * with them. One batch, so that it is all there or all gone. Nothing is left that would keep
+ * the id from being used again.
+ */
+export async function deleteForm(db: Database, row: FormRow): Promise<void> {
+	await db.batch([
+		// The answers first and by name, not left to the table's ON DELETE.
+		db
+			.delete(answer)
+			.where(
+				inArray(
+					answer.responseId,
+					db.select({ id: response.id }).from(response).where(eq(response.formId, row.id)),
+				),
+			),
+		db.delete(response).where(eq(response.formId, row.id)),
+		db.delete(detachedAnswer).where(eq(detachedAnswer.formId, row.id)),
+		// The form before its definitions: it points at one of them.
+		db.delete(forms).where(eq(forms.id, row.id)),
+		db.delete(definitions).where(eq(definitions.formId, row.id)),
+	]);
+}
+
+/**
+ * Deletes an account, with its sessions and its password, when it owns no form. Whether it
+ * does is asked by the statement that deletes: a form brought in a moment ago counts.
+ *
+ * It is refused while there is a form because the table would take the forms with the account
+ * and leave their responses behind, under ids nobody could then reach or delete. Deleting a
+ * form is a decision about a study's data, and is made form by form, with the numbers in view.
+ */
+export async function deleteAccount(db: Database, user: CurrentUser): Promise<void> {
+	const removed = await db
+		.delete(users)
+		.where(
+			and(
+				eq(users.id, user.id),
+				notExists(db.select({ id: forms.id }).from(forms).where(eq(forms.ownerId, user.id))),
+			),
+		);
+	if (removed.meta.changes === 0) {
+		throw new Refused(
+			409,
+			"This account still has forms. Delete each form first, under its Settings: that removes its responses too, and says how many.",
+		);
+	}
 }

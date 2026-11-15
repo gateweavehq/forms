@@ -15,6 +15,9 @@ export {
 export {
 	type Block,
 	type Consent,
+	type Controller,
+	controllerSchema,
+	DEFAULT_WITHDRAWAL,
 	DEFINITION_VERSION,
 	type Definition,
 	type DefinitionInput,
@@ -28,6 +31,9 @@ export {
 	type QuestionType,
 	type RepeatSection,
 	type Section,
+	type Withdrawal,
+	withdrawalOf,
+	withdrawalSchema,
 } from "./definition";
 export {
 	type AskingStep,

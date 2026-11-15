@@ -16,6 +16,8 @@ const responseSchema = z.object({
 	answers: responseAnswersSchema,
 	position: z.string().nullable(),
 	completed: z.boolean(),
+	/** Whether the server would take the answers back if asked now. It decides again when asked. */
+	canWithdraw: z.boolean(),
 	/** Names the wording the response began under. */
 	version: z.string(),
 	formChanged: z.boolean(),
@@ -88,11 +90,23 @@ export async function sendProgress(id: string, secret: string, progress: Progres
 	await post(`/api/responses/${encodeURIComponent(id)}/progress`, progress, secret);
 }
 
-export async function completeResponse(id: string, secret: string): Promise<void> {
-	await post(`/api/responses/${encodeURIComponent(id)}/complete`, {}, secret);
+const completedSchema = z.object({ canWithdraw: z.boolean() });
+
+/** Closes the response. Says whether the answers can still be taken back from then on. */
+export async function completeResponse(
+	id: string,
+	secret: string,
+): Promise<{ canWithdraw: boolean }> {
+	return completedSchema.parse(
+		await post(`/api/responses/${encodeURIComponent(id)}/complete`, {}, secret),
+	);
 }
 
-/** Withdraws a response that is not complete: the server deletes it and its answers. */
+/**
+ * Withdraws a response: the server deletes it and its answers. Refused with 404 when the form
+ * has closed (or the response is gone), and with 409 for a form that lets go of nothing once a
+ * response is complete.
+ */
 export async function withdrawResponse(id: string, secret: string): Promise<void> {
 	await send(`/api/responses/${encodeURIComponent(id)}`, {
 		method: "DELETE",

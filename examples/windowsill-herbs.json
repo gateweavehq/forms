@@ -2,6 +2,10 @@
 	"version": 1,
 	"id": "windowsill-herbs",
 	"title": "Herbs on the windowsill",
+	"controller": {
+		"name": "Made-up Windowsill Gardeners' Club",
+		"contact": "42 Example Lane, Sampleton"
+	},
 	"sections": [
 		{
 			"type": "repeat",

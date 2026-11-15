@@ -43,6 +43,20 @@ export const strings = {
 		passwordChanged: "Your password is changed, and other devices are signed out.",
 		passwordRefused:
 			"The password was not changed. Check the current one, and that the new one has 8 characters.",
+		deleteTitle: "Delete this account",
+		deleteLead:
+			"Removes your name, your email address, your password and your sessions. An account that still has forms cannot be deleted.",
+		/** While the account owns forms: what has to happen first, and where. */
+		deleteBlocked: (forms: number) =>
+			forms === 1
+				? "You have 1 form. Delete it first, under its Settings: that removes its responses too, and says how many."
+				: `You have ${forms} forms. Delete each of them first, under its Settings: that removes its responses too, and says how many.`,
+		delete: "Delete my account",
+		deleteDialog: "Delete your account?",
+		deleteBody:
+			"This removes the account and signs you out everywhere, and the app cannot bring it back. Whoever runs this server can still restore the database as it was for up to 30 days.",
+		deleteType: (email: string) => `Type your email address, ${email}, to confirm`,
+		deleteConfirm: "Delete the account",
 	},
 	owner: {
 		forms: "Your forms",
@@ -100,6 +114,9 @@ export const strings = {
 			address: (id: string) => `Its address will be /f/${id}`,
 			withConsent: "starts with a consent",
 			withoutConsent: "no consent step",
+			runBy: (name: string) => `Run by ${name}.`,
+			noController:
+				"It does not say who runs it. It can be brought in as a draft, and you add that under Settings before opening it.",
 			questions: (count: number) => (count === 1 ? "1 question" : `${count} questions`),
 			repeat: (items: number[], questions: number) =>
 				`${items.reduce((sum, count) => sum + count, 0)} items in ${items.length} ${items.length === 1 ? "group" : "groups"} (${items.join(", ")}), ${questions} ${questions === 1 ? "question" : "questions"} for each`,
@@ -248,6 +265,54 @@ export const strings = {
 				"This removes all of them, the answers kept apart included, and the app cannot bring them back. The form, its link and its definitions stay. Export first if you need the data. Whoever runs this server can still restore the database as it was for up to 30 days.",
 			deleteAllConfirm: (responses: number) =>
 				`Delete ${responses} ${responses === 1 ? "response" : "responses"}`,
+			/** Beside a version's counts, when anyone took their answers back. */
+			withdrawn: (count: number) =>
+				count === 1
+					? "1 taken back by the person who gave it"
+					: `${count} taken back by the people who gave them`,
+			withdrawnNote:
+				"A response that was taken back is deleted and in neither number. Only how many is kept, not which or when.",
+			controllerTitle: "Who runs this form",
+			controllerLead:
+				"The first page tells everyone who answers who runs the study and how to reach them, and links a page that lists what is stored. A form cannot be opened for answers without it.",
+			controllerMissing:
+				"Missing: this form does not say who runs it yet. Fill this in to be able to open it.",
+			controllerName: "Name of the person or organisation",
+			controllerContact: "How to reach them: an email address, a page or a postal address",
+			controllerSave: "Save",
+			controllerSaved: "Saved. New responses start under this version.",
+			controllerNote:
+				"Saving makes a new version of the definition. Responses already begun keep the one they started under.",
+			withdrawalTitle: "Taking answers back",
+			withdrawal: {
+				"until-closed":
+					"People can take their own answers back also after finishing, until you close this form. The first page says so.",
+				"until-complete":
+					"People can take their own answers back until they finish, and not after. The first page says so.",
+			},
+			withdrawalHow:
+				'This is "withdrawal" in the definition: "until-closed" (the default) or "until-complete".',
+			storedLink: "The page that lists what is stored",
+			deleteFormTitle: "Delete this form",
+			deleteFormLead:
+				"Removes the form, its link, every version of its definition, and everything it holds.",
+			deleteForm: "Delete this form",
+			deleteFormDialog: "Delete this form and everything in it?",
+			deleteFormHolds: (
+				responses: number,
+				answers: number,
+				detached: number | null,
+				versions: number,
+			) =>
+				`It holds ${responses} ${responses === 1 ? "response" : "responses"} with ${answers} ${answers === 1 ? "answer" : "answers"}, ${
+					detached === null
+						? "answers kept apart if there are any (how many is shown once the form is closed)"
+						: `${detached} ${detached === 1 ? "answer" : "answers"} kept apart`
+				}, and ${versions} ${versions === 1 ? "version" : "versions"} of its definition.`,
+			deleteFormBody:
+				"All of it is removed in one step, and the app cannot bring it back. Anyone answering right now loses their place, and the form's link stops working. Export first if you need the data. Whoever runs this server can still restore the database as it was for up to 30 days.",
+			deleteFormType: (id: string) => `Type the form's id, ${id}, to confirm`,
+			deleteFormConfirm: "Delete the form",
 		},
 	},
 	notFound: {
@@ -288,6 +353,93 @@ export const strings = {
 			"Forgetting removes the way back from this browser. The answers stay saved, and only their full address opens them.",
 		consentCopy: "Open this text on its own, to print or keep",
 	},
+	/** Who runs a form, and what a person can do about their answers: said before they start. */
+	about: {
+		label: "About this form",
+		runBy: "Run by",
+		/** Until when a person can take their answers back themselves. One line for each rule. */
+		withdrawal: {
+			"until-closed":
+				"You can take your answers back yourself at any time, also after you finish, for as long as this form is open.",
+			"until-complete":
+				"You can take your answers back yourself until you finish. After that, ask whoever runs this form.",
+		},
+		/** On a closed form whose rule was "for as long as it is open". */
+		closed:
+			"This form has closed, so answers that were finished can no longer be taken back from their address. To have yours deleted, ask whoever runs this form.",
+		stored: "What is stored about you",
+	},
+	stored: {
+		heading: "What is stored",
+		of: (form: string) => `About the form "${form}"`,
+		lead: "This page lists everything the server keeps when you answer this form. It is made from the server's own list of what it stores, so nothing is kept that is not named here.",
+		controllerTitle: "Who runs this form",
+		controllerBody:
+			"They decide what the answers are used for, and they are who to ask about yours.",
+		noController: "This form does not say who runs it. Ask whoever sent you its link.",
+		notTitle: "What is not stored",
+		not: [
+			"Your name, unless a question asks for it and you give it.",
+			"Your network (IP) address. The app does not read or store it for anything you send. The network that carries your request to the server sees it, as with any web page.",
+			"Your browser, your device's make or its settings. Only whether the window was the width of a phone, a tablet or a desk screen when you started.",
+			"No cookie is set for answering. Your own browser remembers the way back to your answers, and Options on any card makes it forget.",
+		],
+		tables: {
+			response: "Once for your response",
+			answer: "For each answer you give",
+			detachedAnswer: "Kept apart from your answers",
+		},
+		detachedLead:
+			"This form asks for something at the end that it keeps apart, such as an address for the results. It is stored with nothing that names your response: not its code, and no time.",
+		detachedLimit:
+			"That is all it is. Whoever runs the server could still work out which row came with which response, for example from when each first appeared.",
+		/** One line for each thing the server stores, under the name its own list gives it. */
+		columns: {
+			response: {
+				id: "A random code for your response. It is part of the address of your answers.",
+				formId: "Which form you answered.",
+				definitionHash:
+					"Which wording of the form you answered, so that your answers are read against the questions you saw.",
+				answersVersion: "A number for the format answers are stored in. It says nothing about you.",
+				secretSeal:
+					"A seal that proves the long code at the end of your address, without being that code. The code itself is only in your address.",
+				device:
+					"Whether you started on a phone, a tablet or a desk screen, judged by the width of the window.",
+				position: "Which card you are on, so that you can continue on another device.",
+				createdAt: "When you started.",
+				updatedAt: "When you last answered.",
+				completedAt: "When you finished.",
+			},
+			answer: {
+				responseId: "Which response the answer belongs to.",
+				questionId: "Which question it answers.",
+				itemId: "Which item it is about, where a question is asked about several.",
+				value: "The answer itself, or that you passed the question without one.",
+				activeMs: "How long the question was on your screen while the page was visible.",
+				changes: "How often you replaced the answer with a different one.",
+				updatedAt: "When you gave the answer or last changed it.",
+			},
+			detachedAnswer: {
+				id: "A random number. It is not a count, so it does not say in which order rows arrived.",
+				formId: "Which form it was given to.",
+				answers: "What you entered.",
+			},
+		} as Record<string, Record<string, string>>,
+		withdrawTitle: "Taking your answers back",
+		withdrawDoes:
+			"Taking your answers back deletes your response, every answer in it and the times that go with them, in one step. It is done from the address of your answers, on any device that has it.",
+		withdrawCount:
+			"One thing is kept: a count of how many people took their answers back. It is a number for the form, and says neither who nor when.",
+		withdrawDetached:
+			"What this form keeps apart stays. Nothing connects it to your response, so it cannot be found from your address. To have it removed, ask whoever runs the form.",
+		withdrawCopies:
+			"Deleting reaches this server only. If whoever runs the form has already saved a copy of the answers, that copy is theirs to delete: ask them.",
+		historyTitle: "How long a deleted answer remains",
+		history: (days: number) =>
+			`Deleted means removed from the database as it is now. The database keeps its own history for up to ${days} days, from which whoever runs the server could bring back an earlier state. After that, what was deleted is gone from there too.`,
+		print: "Print or save as PDF",
+		back: "Back to the form",
+	},
 	yours: {
 		open: "Your answers and this device",
 		title: "Your answers and this device",
@@ -297,8 +449,13 @@ export const strings = {
 			"This browser remembers the way back to your answers, so that the form's link can offer them again. Forgetting removes that. Your answers stay saved, and from then on only their full address opens them.",
 		forget: "Forget on this device",
 		withdrawTitle: "Withdraw",
-		withdrawBody:
-			"Deletes everything you have answered so far. You can do this until you finish the form. The server's database can still be restored as it was for up to 30 days.",
+		/** Until when, by the rule of the form as the person began it. */
+		withdrawBody: {
+			"until-closed":
+				"Deletes everything you have answered so far. You can also do this after you finish, for as long as the form is open. The server's database can still be restored as it was for up to 30 days.",
+			"until-complete":
+				"Deletes everything you have answered so far. You can do this until you finish the form. The server's database can still be restored as it was for up to 30 days.",
+		},
 		withdraw: "Delete my answers",
 		withdrawSure: "This cannot be undone.",
 		withdrawConfirm: "Yes, delete them",
@@ -306,7 +463,11 @@ export const strings = {
 		close: "Close",
 		withdrawnTitle: "Your answers were deleted",
 		withdrawnBody:
-			"What you answered was deleted, and nobody who runs this form can see it. The server's database can still be restored as it was for up to 30 days. You can close this page.",
+			"Your response, its answers and the times that go with them were deleted from this server. Its database can still be restored as it was for up to 30 days. If whoever runs this form saved a copy before now, that copy is theirs to delete.",
+		/** Added for a form that keeps something apart, which withdrawing cannot reach. */
+		withdrawnDetached:
+			"Anything you entered to be kept apart, such as an address for the results, is still stored: nothing connects it to your answers, so it could not be found. To have it removed, ask whoever runs this form.",
+		withdrawnClose: "You can close this page.",
 	},
 	consentCopy: {
 		heading: "Consent text",
@@ -461,5 +622,26 @@ export const strings = {
 		answersTitle: "What you answered",
 		answersNote: "Your own answers, as they were saved. Nobody else's are shown.",
 		noAnswer: "No answer",
+		/** What a person can still do about answers they have finished giving. */
+		takeBack: {
+			title: "Changed your mind?",
+			/** While the server would do it. */
+			can: "You can take your answers back for as long as this form is open. This page's address is the only way back to them, so keep it if you may want to: it works on any device.",
+			/** The form lets go of nothing after the end. */
+			never:
+				"Your answers are part of the study now and cannot be taken back from here. To have them deleted, ask whoever runs this form.",
+			/** The form would have, and is closed. */
+			closed:
+				"This form has closed, so answers can no longer be taken back from here. To have yours deleted, ask whoever runs this form.",
+			ask: "Take my answers back",
+			sure: "This deletes your response, every answer in it and the times that go with them. It cannot be undone.",
+			sureDetached:
+				"Anything you entered to be kept apart, such as an address for the results, stays: nothing connects it to your answers, so it cannot be found from here. To have it removed, ask whoever runs this form.",
+			confirm: "Yes, delete my answers",
+			/** The server said no: the form closed in the meantime, or they are gone already. */
+			refused:
+				"Your answers could not be taken back from here: the form has closed in the meantime, or they were already deleted. Ask whoever runs this form.",
+			failed: "Your answers could not be deleted. Check your connection and try again.",
+		},
 	},
 };

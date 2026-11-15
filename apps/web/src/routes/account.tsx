@@ -2,15 +2,18 @@ import { createFileRoute, Link, redirect, useRouter } from "@tanstack/react-rout
 import { type FormEvent, useState } from "react";
 import { Button } from "#/components/button";
 import { LiveButton } from "#/components/live-button";
+import { ConfirmButton } from "#/components/owner/confirm";
 import { authClient } from "#/lib/auth-client";
-import { getUser } from "#/lib/session";
+import { getMyForms } from "#/lib/owner";
+import { owner } from "#/lib/owner-client";
 import { strings } from "#/lib/strings";
 
 export const Route = createFileRoute("/account")({
 	loader: async () => {
-		const user = await getUser();
-		if (!user) throw redirect({ to: "/login", search: { redirect: "/account" } });
-		return user;
+		const mine = await getMyForms();
+		if (!mine) throw redirect({ to: "/login", search: { redirect: "/account" } });
+		// How many forms the account has decides whether it can be deleted.
+		return { user: mine.user, forms: mine.forms.length };
 	},
 	head: () => ({ meta: [{ title: `${strings.account.title} · ${strings.product}` }] }),
 	component: AccountPage,
@@ -20,7 +23,7 @@ const field =
 	"min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base placeholder:text-muted-foreground";
 
 function AccountPage() {
-	const user = Route.useLoaderData();
+	const { user, forms } = Route.useLoaderData();
 	const router = useRouter();
 	const [message, setMessage] = useState<{ text: string; bad: boolean }>();
 	const [pending, setPending] = useState(false);
@@ -101,6 +104,35 @@ function AccountPage() {
 			<Button variant="outline" className="self-start" onClick={() => void signOut()}>
 				{strings.auth.signOut}
 			</Button>
+			<section className="flex flex-col gap-3 border-t pt-6">
+				<h2 className="text-lg font-semibold">{strings.account.deleteTitle}</h2>
+				<p className="text-sm text-muted-foreground">{strings.account.deleteLead}</p>
+				{forms > 0 ? (
+					// Said before the button, not after pressing it. The server refuses all the same.
+					<p role="status" className="rounded-lg border px-4 py-3">
+						{strings.account.deleteBlocked(forms)}{" "}
+						<Link to="/forms" className="font-medium underline underline-offset-4">
+							{strings.owner.forms}
+						</Link>
+					</p>
+				) : (
+					<div>
+						<ConfirmButton
+							label={strings.account.delete}
+							title={strings.account.deleteDialog}
+							confirmLabel={strings.account.deleteConfirm}
+							typed={{ label: strings.account.deleteType(user.email), expected: user.email }}
+							onConfirm={async (confirm) => {
+								await owner("DELETE", "account", { confirm });
+								await router.invalidate();
+								await router.navigate({ to: "/login" });
+							}}
+						>
+							<p>{strings.account.deleteBody}</p>
+						</ConfirmButton>
+					</div>
+				)}
+			</section>
 		</main>
 	);
 }

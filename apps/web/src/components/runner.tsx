@@ -1,6 +1,7 @@
 import {
 	type AnswerValue,
 	type Definition,
+	detachedQuestions,
 	flow,
 	getAnswer,
 	isAnswered,
@@ -10,6 +11,7 @@ import {
 	type ResponseAnswers,
 	reachedAnswers,
 	withAnswer,
+	withdrawalOf,
 } from "@gateweave/forms-schema";
 import { Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -161,6 +163,8 @@ function Answering({
 	const [answers, setAnswers] = useState<ResponseAnswers>(initial.answers);
 	const [position, setPosition] = useState<string | undefined>(initial.position ?? undefined);
 	const [completed, setCompleted] = useState(initial.completed);
+	/** Whether the server would take the answers back: its word, never worked out here. */
+	const [canWithdraw, setCanWithdraw] = useState(initial.canWithdraw);
 	const [withdrawn, setWithdrawn] = useState(false);
 	const [finishing, setFinishing] = useState<"no" | "sending" | "failed">("no");
 	const [failing, setFailing] = useState(false);
@@ -212,8 +216,9 @@ function Answering({
 		try {
 			// Every answer first: completing is refused while a required one has not arrived.
 			await queue.current?.settled();
-			await completeResponse(responseId, secret);
+			const done = await completeResponse(responseId, secret);
 			forgetResponse(definition.id);
+			setCanWithdraw(done.canWithdraw);
 			setCompleted(true);
 		} catch {
 			setFinishing("failed");
@@ -226,13 +231,29 @@ function Answering({
 	};
 
 	if (withdrawn) {
-		return <Notice title={strings.yours.withdrawnTitle}>{strings.yours.withdrawnBody}</Notice>;
+		// What a form keeps apart is only ever sent once a response is complete, so only someone
+		// who had finished can have left any.
+		const mayHaveLeft = completed && detachedQuestions(definition).length > 0;
+		return (
+			<Notice title={strings.yours.withdrawnTitle}>
+				{strings.yours.withdrawnBody} {mayHaveLeft && `${strings.yours.withdrawnDetached} `}
+				{strings.yours.withdrawnClose}
+			</Notice>
+		);
 	}
 	if (completed) {
 		return (
-			<EndPage definition={definition} askDetached={!initial.completed} version={initial.version}>
+			<EndPage
+				definition={definition}
+				askDetached={!initial.completed}
+				version={initial.version}
+				responseId={responseId}
+				secret={secret}
+				canWithdraw={canWithdraw}
+				onWithdrawn={() => setWithdrawn(true)}
+				footer={<MadeWith className="mt-auto pt-6" />}
+			>
 				<AnswersSummary definition={definition} answers={answers} />
-				<MadeWith className="mt-auto pt-6" />
 			</EndPage>
 		);
 	}
@@ -481,6 +502,7 @@ function Answering({
 						secret={secret}
 						version={initial.version}
 						hasConsent={definition.consent !== undefined}
+						withdrawal={withdrawalOf(definition)}
 						onWithdrawn={() => {
 							// Nothing more is sent for a response that is gone.
 							queue.current?.stop();
