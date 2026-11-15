@@ -117,9 +117,14 @@ The report says what the source held, what each section became and what was chan
 | `/forms/<form>`                   | Its results: overview, items, questions, responses, kept apart  |
 | `/forms/<form>/settings`          | Opening and closing, who runs it, versions, deleting            |
 
+The consent and the "what is stored" page take `?v=<hash>` for the wording a response began
+under. A hash the form never had is not found: showing the current wording in its place would
+pass one text off as another.
+
 A form is a row in `form` that belongs to one account. Its id is what its address carries, so
 it never changes; its wording changes by pointing at a newer definition. An id is free only
-when no form has it and nothing was ever answered under it: responses can outlive their form,
+when no form has it, nothing was ever answered under it, and it is not the retired id of a
+form someone else deleted: responses can outlive their form,
 and whoever took the id next would otherwise be shown them. It is a `draft` (its
 link says it is not open), `open`, or `closed` (no new responses; those begun can finish).
 
@@ -161,9 +166,11 @@ The owner's addresses are under `/api/owner`, and need a session:
 
 Bodies there may be up to 4 MB, because a Tally form's page data runs to a megabyte or two.
 
-The two that delete take what the person typed to confirm (`{ "confirm": … }`): the form's id,
-or the account's email address. The page asks for it, and the server does not take the page's
-word that it did.
+Deleting a form takes what the person typed to confirm (`{ "confirm": … }`), the form's id:
+the page asks for it, and the server does not take the page's word that it did. Deleting an
+account takes the account's current password (`{ "password": … }`), checked by Better Auth's
+own `verifyPassword` and counted with the tries at changing the password, per account. An
+email address would not do: whoever holds a stolen session can read it off the account page.
 
 ### Taking answers back
 
@@ -193,8 +200,16 @@ them: the secret in their address. Whoever holds the address can do it, on any d
 
 Starting a response and storing a kept-apart answer make the mirror-image check: for a form
 that has a row, their inserts ask that the form is still there and open, so that a request
-that read the form a moment before it was deleted or closed writes nothing. No test holds a
-request in that gap, so this rests on reading the statements.
+that read the form a moment before it was deleted or closed writes nothing. Giving a form a
+new definition does the same for the definition's row as well as the form's pointer to it: a
+replace that loses to a delete, or to the form being opened, leaves no version behind.
+
+**Statements that ask again live in `server/statements.ts`**, as SQL with its values and no
+import of the Worker's runtime. No pair of real requests can be made to arrive in the losing
+order on purpose, so the tests build the statements as the server does from what it read,
+let the other request go first, and then run them against the migrated database
+(`test/withdrawal.test.ts`, `test/owner.test.ts`). A new statement that depends on something
+read earlier goes there, with such a test.
 
 ### What a respondent is told
 
@@ -204,7 +219,9 @@ server's schema, not written beside it: `storedColumns` (`server/stored.ts`) lis
 of `response`, `answer` and `detached_answer`, the page shows a line of plain words for each
 (`strings.stored.columns`), and a column without words is shown by its name.
 `test/stored.test.ts` compares the page with the tables as the migrations made them, and fails
-on a column that is missing or has no words. The page also says what is not stored, what
+on a column that is missing or has no words. It also lists every table of the migrated
+database and fails on one that is neither on the page nor in `OTHER_TABLES` (`server/stored.ts`)
+with a reason for being left off, so that a new table cannot go unmentioned by default. The page also says what is not stored, what
 taking answers back removes and leaves, and how long a deleted answer stays in the database's
 own history. [data.md](data.md) is the same for whoever runs a deployment.
 
@@ -322,13 +339,19 @@ things stand in the way of a flood, and a third is planned:
 - `detached_answer`: a random key, the form id and the answers. Nothing else.
 - `form`: id, the owning account, title, state, the hash of the definition new responses start
   under, and when it was created and updated.
+- `retired_form_id`: the id of a deleted form and the account that had it. Nothing else.
 - `user`, `session`, `account`, `verification`: Better Auth's tables, for the people who run
   forms. Deleting a `user` row in the database deletes their `form` rows and leaves the
   responses, which is why the app refuses to delete an account that still owns a form.
 
 **Deleting a form** removes, in one batch, its responses and their answers, what it kept
-apart, its row and every definition it has had (`deleteForm`, `server/owner.ts`). Nothing is
-left under its id, so the id is free again. **Deleting an account** removes the `user` row
+apart, its row and every definition it has had (`deleteForm`, `server/owner.ts`). The batch
+also writes the one thing that is kept: the id and the account that had it, in
+`retired_form_id`. Links to a form outlive it, so its id can be used again only by that
+account; anyone else is told what they would be told about an id in use, and once the account
+is deleted nobody can. The row does not refer to `user`, so that it stays. A batch the
+database refuses (one too large, for instance) deleted nothing, and the owner is told so in
+words, with what to do. **Deleting an account** removes the `user` row
 with its sessions and password, in a statement that asks again whether it owns a form
 (`deleteAccount`): the forms go first, one by one, each with its numbers in view, because
 deleting a form is a decision about a study's data and deleting an account should not make it
@@ -400,7 +423,8 @@ one number per version: a response taken back before finishing and one taken bac
 not told apart, there is no time, and no id. What an owner can still work out:
 
 - **Which one, by looking twice.** A response that was in the list, or in an export, and is
-  not there now was withdrawn or deleted. An owner who exported yesterday still has those
+  not there now was withdrawn or deleted. This is what tells an owner that someone withdrew,
+  with or without a count; the count adds that it was the person's doing and not a deletion. An owner who exported yesterday still has those
   answers: withdrawing removes them from the server, and cannot reach a copy. The pages for
   respondents say so. Nothing in the app can prevent it; a study that promises more has to
   promise it about its own copies.

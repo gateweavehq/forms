@@ -35,10 +35,11 @@ which a browser does not send.
 
 ### About a form
 
-| Table        | Holds                                                                                                                           |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| `form`       | The id, the owning account, the title, whether it is a draft, open or closed, and the version new responses start under         |
-| `definition` | Every version of the form's definition that was ever current, as JSON, with a count of the responses to it that were taken back |
+| Table             | Holds                                                                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `form`            | The id, the owning account, the title, whether it is a draft, open or closed, and the version new responses start under         |
+| `definition`      | Every version of the form's definition that was ever current, as JSON, with a count of the responses to it that were taken back |
+| `retired_form_id` | The id of each form that was deleted and the id of the account that had it. Nothing else of the form                            |
 
 The controller's name and contact are part of the definition, and so of every version that has
 them.
@@ -81,23 +82,33 @@ is the step that removes all of it.
 
 ## What each way of deleting removes
 
-| Who        | Does what                                       | Removed, in one batch                                                                               | Stays                                                                                        |
-| ---------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Respondent | Changes an answer that closes a later question  | The answers under the question that closed                                                          | Everything else                                                                              |
-| Respondent | Takes their answers back (withdraws)            | The response and every answer in it, which is all the times as well: they are columns of those rows | A count on the version, one higher. What the form kept apart                                 |
-| Owner      | Deletes one response                            | The response and its answers                                                                        | What the form kept apart. No count is kept of these                                          |
-| Owner      | Deletes every response of a form                | Every response, every answer, and everything the form kept apart                                    | The form, its versions and their counts of withdrawn responses                               |
-| Owner      | Deletes a form (types its id to confirm)        | Every response and answer, everything kept apart, the form, and every version with its count        | Nothing under the form's id, which can then be used again                                    |
-| Owner      | Deletes their account (types its email address) | The `user` row, the password and every session                                                      | Refused while the account owns a form: delete the forms first, each with its numbers in view |
+| Who        | Does what                                          | Removed, in one batch                                                                               | Stays                                                                                                                                                |
+| ---------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Respondent | Changes an answer that closes a later question     | The answers under the question that closed                                                          | Everything else                                                                                                                                      |
+| Respondent | Takes their answers back (withdraws)               | The response and every answer in it, which is all the times as well: they are columns of those rows | A count on the version, one higher. What the form kept apart                                                                                         |
+| Owner      | Deletes one response                               | The response and its answers                                                                        | What the form kept apart. No count is kept of these                                                                                                  |
+| Owner      | Deletes every response of a form                   | Every response, every answer, and everything the form kept apart                                    | The form, its versions and their counts of withdrawn responses                                                                                       |
+| Owner      | Deletes a form (types its id to confirm)           | Every response and answer, everything kept apart, the form, and every version with its count        | The id, retired to the account that had it (`retired_form_id`): that account can use it again, nobody else can                                       |
+| Owner      | Deletes their account (gives its current password) | The `user` row, the password and every session                                                      | The ids of forms the account deleted, retired for good. Refused while the account owns a form: delete the forms first, each with its numbers in view |
 
 **Withdrawing.** A respondent can always withdraw a response that is not finished. A finished
 one can be withdrawn while the form is open, with the address it was answered from, on any
 device that has that address, when the definition's `withdrawal` is `"until-closed"` (the
 default). With `"until-complete"`, finishing ends it. The rule is the one of the definition the
-response began under: the first page told the person that rule, and a later version of the form
-does not take it back. Once the form is closed, or under `"until-complete"`, the pages name the
-controller as the one to ask, and the owner can delete the response if the respondent gives
-them its id: the part of its address after `/r/` and before the `#`.
+response began under, and a later version of the form does not change it for that response.
+Once the form is closed, or under `"until-complete"`, the pages name the controller as the one
+to ask, and the owner can delete the response if the respondent gives them its id: the part of
+its address after `/r/` and before the `#`.
+
+**Responses from before this rule existed.** A definition that does not say gets
+`"until-closed"`, and that includes every definition stored before `withdrawal` existed. So on
+updating a deployment, finished responses on open forms become withdrawable by whoever holds
+their address, although the first page those people saw said nothing of the kind and the
+"Options" dialog told them "until you finish the form". Nobody is given less than they were
+told; a study is given less certainty than it had. A study that must keep the old rule sets
+`"withdrawal": "until-complete"` in its definition. That covers responses begun from then on
+only: one begun under the earlier version keeps `"until-closed"`, and stays withdrawable until
+the form is closed. Closing the form is what ends it for all of them.
 
 **What a form keeps apart is not removed by withdrawing.** Such a row names no response, so
 there is nothing to find it by. The pages say so before and after, and say to ask the
@@ -106,9 +117,41 @@ and only once the form is closed and holds five such rows, which is when the app
 before that, the operator can find it in the database.
 
 **The count of withdrawn responses** is one number per version: before and after finishing are
-not told apart, and there is no time and no id. What it still gives away is under "What an
-operator or an owner could still infer" in [architecture](architecture.md): an owner who looks
-at the list of responses often, or who kept an export, can tell which one went.
+not told apart, and there is no time and no id. It is not what tells an owner that someone
+withdrew. An owner sees that a response is gone from the list, and may have read or exported
+its answers before; the count adds only that it was taken back by the person who gave it, and
+not deleted some other way. The page for respondents says this in those terms. More under
+"What an operator or an owner could still infer" in [architecture](architecture.md).
+
+**A deleted form's id is retired.** A form's id is its address, and links to it outlive it: an
+invitation, a saved copy of a consent. So the id of a deleted form can be used again by the
+account that had it and by nobody else, who are told what anyone is told about an id in use.
+When that account is deleted the id stays retired for good, since the row then names an
+account that no longer exists. For the same reason a page asked for under a version the form
+never had (`/f/<form>/consent?v=…`, `/f/<form>/stored?v=…`) is not found, and never shows the
+current wording in its place.
+
+**Deleting an account frees its place on the sign-up list.** `SIGN_UP_ALLOW` is a setting, not
+something the app can change. After an account is deleted its address is still on the list,
+and since no address can be verified yet, whoever signs up with it next gets a new account.
+Take the address off the list when its owner deletes their account. The account page says so.
+
+## How much one deletion can remove
+
+Deleting a form, and deleting every response of a form, are each one batch, which is one
+transaction: all of it or none. What is known about its size:
+
+- Measured on a local database: a form with 500,000 answer rows was deleted in 2.4 seconds.
+  That is the local runtime, not D1 as deployed, where the same batch was not measured.
+- From Cloudflare's documentation, not measured: the Workers Free plan allows 100,000 rows
+  written a day, and a deleted row counts as a written one. A form with more answers than what
+  is left of that day's allowance cannot be deleted in one step there. The paid plan has no
+  such daily ceiling.
+
+When the database refuses the batch, for size or any other reason, nothing was deleted, and
+the app says so in words instead of answering with a bare error: delete responses one at a
+time to make the form smaller and try again, or delete in the database yourself. There is no
+way yet to delete a form's responses in parts from the app.
 
 ## What "deleted" means: D1 Time Travel
 

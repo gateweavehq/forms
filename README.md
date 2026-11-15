@@ -63,8 +63,11 @@ answered while it belonged to nobody cannot be added, like any id with answers u
    each time, so that watching them arrive cannot say whose each is. Closing also ends people
    taking back answers they had finished.
 6. **Delete it** when the study is over, under Settings: the form, its responses, what it kept
-   apart and every version go in one step, after you have typed its id. An account can be
-   deleted once it has no forms.
+   apart and every version go in one step, after you have typed its id. The id stays yours:
+   nobody else can bring a form in under it, so that an old link never opens someone else's
+   form. An account can be deleted once it has no forms, with its current password. If the
+   server takes accounts from a list, take the address off `SIGN_UP_ALLOW` afterwards:
+   whoever signs up with it next would get a new account.
 
 The CSV files are UTF-8 and begin with a byte-order mark, so that a spreadsheet opened by
 double-click reads them right. In R, `readr::read_csv("responses.csv")` skips the mark; with

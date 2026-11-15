@@ -42,6 +42,17 @@ name and a way to reach them), which a form's Settings page can fill in. A form 
 already open when a deployment got this rule stays open; it has to gain the line before it can
 be opened again after closing.
 
+**On updating to the version with `withdrawal`:** every form whose definition does not set it
+gets `"until-closed"`. Finished responses on open forms become withdrawable by whoever holds
+their address, although their first page did not say so and the dialog under "Options" said
+"until you finish the form". If a study on your deployment must keep the old rule, give its
+form a definition with `"withdrawal": "until-complete"` before or straight after updating.
+That holds for responses begun from then on; those begun earlier keep `"until-closed"` until
+the form is closed. [data.md](data.md) has the reasoning.
+
+**When someone deletes their account**, take their address off `SIGN_UP_ALLOW`. The app cannot
+change a setting, and an address left on the list belongs to whoever signs up with it next.
+
 ## Rate limits at Cloudflare's edge
 
 Two addresses of the app can be called by anyone, with no secret: starting a response

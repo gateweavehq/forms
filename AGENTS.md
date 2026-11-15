@@ -136,9 +136,19 @@ silently.
     in `response`, `answer` or `detached_answer` gets a line in `strings.stored.columns`, and
     `test/stored.test.ts` fails until it has one. Examples and fixtures name a made-up
     controller.
-20. **Deleting a form deletes everything under its id, in one batch**, and an account is
-    deleted only when it owns no form. Both are the owner's alone, asked for with what the
-    person typed, and "not found" for anyone else like every other owner address.
+20. **Deleting a form deletes everything under its id, in one batch, and retires the id.**
+    `retired_form_id` keeps the id and the account that had it, nothing else: that account
+    may use the id again, anyone else gets the refusal an id in use gets, and once the account
+    is deleted the id is retired for good. An old link must never open another person's form,
+    which is also why a page asked for under a version the form never had (`?v=`) is not
+    found. An account is deleted only when it owns no form, and only with its current
+    password, checked by Better Auth and counted per account. Both deletions are the owner's
+    alone, and "not found" for anyone else like every other owner address. A batch the
+    database refuses answers in words that nothing was deleted, never with a bare 500.
+21. **A statement that depends on something read earlier asks again**, and lives in
+    `server/statements.ts` with a test that runs it in the losing order: the other request
+    first, then the statement, against the migrated database. Do not test a race by hoping
+    for one.
 
 ## Code style
 
