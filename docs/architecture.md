@@ -106,7 +106,9 @@ The report says what the source held, what each section became and what was chan
 | `/forms/<form>/settings`          | Opening and closing, versions, a new definition, deleting       |
 
 A form is a row in `form` that belongs to one account. Its id is what its address carries, so
-it never changes; its wording changes by pointing at a newer definition. It is a `draft` (its
+it never changes; its wording changes by pointing at a newer definition. An id is free only
+when no form has it and nothing was ever answered under it: responses can outlive their form,
+and whoever took the id next would otherwise be shown them. It is a `draft` (its
 link says it is not open), `open`, or `closed` (no new responses; those begun can finish).
 
 The files in `examples/` are served only where `FORMS_EXAMPLES` is `"1"`, which development and
@@ -176,8 +178,10 @@ made-up responses with the working written beside them.
   summary gives both counts, and every share is out of those who answered.
 - **Active time** is the time questions were on screen in a visible tab, added up. Medians are
   of completed responses.
-- **Where people stopped** is the last position an unfinished response saved, by section and
-  group. The browser sends positions, so one that names nothing in the form is counted apart.
+- **Where people stopped** is, for each unfinished response, the last question of its own
+  flow that it answered or passed, by part of the form and question by question. It is worked
+  out from the answers the server holds. The position a browser saves is not used: it is the
+  browser's word, and it moves when someone only looks back.
 - **Signals** mark what is worth a second look and prove nothing: a completed response under
   30% of the median active time, and a group where three or more items got the same status.
 - **Filters** are a device class and one answer of a single-choice question asked once. They
