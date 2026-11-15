@@ -13,7 +13,7 @@
 					"text": ", so you can stop and pick up later, on this device or another. Every question can be passed without an answer."
 				}
 			],
-			"No name, no network address and nothing about your device beyond its rough size is stored. An email address, if you choose to leave one at the end, is kept apart from your answers and cannot be linked to them."
+			"No name, no network address and nothing about your device beyond its rough size is stored. An email address, if you choose to leave one at the end, is stored apart from your answers, without anything that names your response."
 		],
 		"statement": "I have read this and agree to take part."
 	},
@@ -313,7 +313,7 @@
 					"type": "email",
 					"label": "Would you like the results? Leave an email address.",
 					"description": [
-						"It is stored apart from your answers and cannot be linked to them. Leave it empty to skip."
+						"It is stored apart from your answers, without anything that names your response. Leave it empty to skip."
 					],
 					"placeholder": "you@example.com",
 					"detached": true

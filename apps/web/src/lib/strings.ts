@@ -120,7 +120,7 @@ export const strings = {
 		finishFailed: "The form could not be finished. Check your connection and try again.",
 		detachedTitle: "One more thing, if you like",
 		detachedBody:
-			"What you enter here is stored apart from your answers, with nothing that links the two.",
+			"What you enter here is stored apart from your answers, without anything that names your response.",
 		send: "Send",
 		sendFailed: "This could not be sent. Check your connection and try again.",
 		sendBusy: "Many people are sending this right now. Wait a minute and press Send again.",

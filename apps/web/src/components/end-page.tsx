@@ -18,7 +18,7 @@ import { RichTextView } from "./rich-text";
  * a request that names no response, so that nothing on the way can tie the two together.
  *
  * They are asked once, right after finishing. The server cannot say whether a response already
- * sent them (that would be a link), so a finished response opened again shows the thanks alone.
+ * sent them (the response would then say so), so a finished response opened again shows the thanks alone.
  */
 export function EndPage({
 	definition,

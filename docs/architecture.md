@@ -33,8 +33,8 @@ question { id, type, label, description?, detail?, required?, showIf?, detached?
   `any` and `not`. Inside a block, a rule reads the same item's answers. A question that is not
   shown counts as unanswered for the rules after it, so changing an answer closes what hung on
   the old one.
-- **A `detached` question** is asked after the response is complete and stored with no link to
-  it. Rules may not cross that line in either direction.
+- **A `detached` question** is asked after the response is complete and stored without anything
+  that names it. Rules may not cross that line in either direction.
 - **Ids are unique across the form** (questions, items, groups), because answers are stored under
   them. Text is data (paragraphs of spans with bold, italic and links), never HTML.
 
@@ -149,8 +149,27 @@ things stand in the way of a flood, and a third is planned:
 - **Detached answers** are sent after the response is closed, in a request that carries no
   response id and no secret, and are stored with no time. Their key is random because SQLite's
   own numbering is the order of arrival, which would pair each row with the response completed
-  just before it. With very few responses, a detached answer can still be guessed from the
-  count alone; no storage can prevent that.
+  just before it.
+
+### What an operator could still infer
+
+"Stored without anything that names your response" is what the storage gives, and the app, the
+docs and the examples promise no more than that. It is not unlinkability. Whoever runs the
+deployment, or reads its database, could still pair a detached answer with a response:
+
+- **By counting, on a small sample.** If one response is complete and one detached row exists,
+  they belong together. The same goes for the first few of any study.
+- **By time, through D1's history.** A response's `completed_at` is stored to the millisecond,
+  and its detached answer arrives seconds later. The row carries no time, but D1 keeps 30 days
+  of history (Time Travel): the database as it was at a given moment can be restored, which
+  shows when a row first existed. Compared with completion times, that pairs rows with
+  responses whenever completions are not close together.
+- **By Cloudflare's own records of requests**, to whatever extent the account keeps any. The
+  Worker's invocation logs are off; the two requests still came from one connection.
+
+Closing the second would take holding detached answers back and writing them in shuffled
+batches, so that a row's first appearance says nothing about one response. That is not built.
+A study that needs more than "not named" should collect contact details somewhere else.
 
 ### Why the cards behave as they do
 

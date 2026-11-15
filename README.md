@@ -21,7 +21,7 @@ Forms defines that as one block of questions and a list of items, and asks it on
 - **Resume anywhere, with no account.** Every answer is stored as it is given. The response's
   address continues it on another device.
 - **Nothing about the person is stored**: no network address, no user agent. Contact details a study
-  promises not to link to the answers are asked at the end and stored apart.
+  wants kept apart are asked at the end and stored without anything that names the response.
 
 The reasons, with their sources, are in [docs/architecture.md](docs/architecture.md).
 

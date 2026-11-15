@@ -43,8 +43,9 @@ const questionBase = {
 	required: z.boolean().optional(),
 	showIf: conditionSchema.optional(),
 	/**
-	 * The answer is asked at the end and stored with no link to the rest of the response, for
-	 * contact details a study promises not to tie to the answers.
+	 * The answer is asked at the end and stored apart, without anything that names the response:
+	 * for contact details a study wants kept away from the answers. That is less than
+	 * unlinkable, and a form's own text must not promise more (docs/architecture.md).
 	 */
 	detached: z.boolean().optional(),
 };

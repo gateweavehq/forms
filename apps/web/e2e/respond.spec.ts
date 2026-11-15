@@ -356,7 +356,7 @@ test("keeps the detached answer apart from the response", async ({ page }) => {
 
 	await expect(heading(page, "Thank you")).toBeVisible();
 	await expect(
-		page.getByText("stored apart from your answers, with nothing that links"),
+		page.getByText("stored apart from your answers, without anything that names your response"),
 	).toBeVisible();
 	// Its own rule still holds: the second question waits for an address.
 	await expect(page.getByText("May we write to you about a follow-up survey?")).toHaveCount(0);
@@ -397,7 +397,7 @@ test("keeps the detached answer apart from the response", async ({ page }) => {
 	expect(refused.ok()).toBe(false);
 
 	// Opened again, a finished response thanks and asks nothing: the server cannot know whether
-	// an address was left, since knowing would be a link.
+	// an address was left, since the response would then say so.
 	await page.reload();
 	await expect(heading(page, "Thank you")).toBeVisible();
 	await expect(page.getByRole("button", { name: "Send" })).toHaveCount(0);

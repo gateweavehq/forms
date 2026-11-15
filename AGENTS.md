@@ -62,10 +62,12 @@ silently.
    cookie or a log line.
 4. **Nothing about the person is stored.** No network address, no user agent, in tables or in
    logs. `device` is the viewport's rough width. Keep invocation logs off in `wrangler.jsonc`.
-5. **A detached answer has no link to a response**: no response id, no time, no order of
-   arrival, and it is sent in a request without the response's secret. The response's own
-   address refuses a detached question. Do not add a column, a log or a header that would pair
-   the two.
+5. **A detached answer is stored without anything that names its response**: no response id,
+   no time, no order of arrival, and it is sent in a request without the response's secret. The
+   response's own address refuses a detached question. Do not add a column, a log or a header
+   that would pair the two. That is all it is: an operator can still infer a pairing (see
+   "What an operator could still infer" in `docs/architecture.md`), so never write "cannot be
+   linked" or "anonymous" in the app, the docs or an example.
 6. **How the cards behave is evidence, not taste.** No progress bar or percentage. Follow-ups
    after the group's status questions, never under the answer that opened them. Moving on by
    itself only on item cards, said beforehand, announced, and switchable. No dragging, no swiping,
