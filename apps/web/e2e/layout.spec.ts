@@ -1,8 +1,9 @@
-import type { Page } from "@playwright/test";
+import type { Browser, Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
 import {
 	CONSENT,
 	choose,
+	FORM,
 	forward,
 	heading,
 	open,
@@ -10,6 +11,7 @@ import {
 	skipTo,
 	start,
 } from "./helpers";
+import { bringIn, freshId, respond, signUp, tab } from "./owner";
 
 /**
  * The controls on the page that are smaller than 44 by 44 CSS pixels, each described. WCAG asks
@@ -116,4 +118,109 @@ test("follows the device's light or dark theme", async ({ page }) => {
 	const lightness = (color: string) => Number(/oklch\(([\d.]+)/.exec(color)?.[1] ?? Number.NaN);
 	const text = await page.evaluate(() => getComputedStyle(document.body).color);
 	expect(lightness(text)).toBeGreaterThan(lightness(dark));
+});
+
+/**
+ * What a respondent can do about their own answers, and the pages of someone who runs a form.
+ * The same two measures as the cards: nothing scrolls sideways, and every control takes a thumb.
+ */
+async function respondentsOwn(page: Page, check: () => Promise<void>): Promise<void> {
+	// The consent on a page of its own.
+	await page.goto(`${FORM}/consent`);
+	await expect(page.getByRole("button", { name: "Print or save as PDF" })).toBeEnabled();
+	await check();
+
+	// The options in the header, with the entry for one's own answers, and its dialog.
+	await start(page);
+	await page.getByRole("button", { name: "Options" }).click();
+	await check();
+	await page.getByRole("button", { name: "Your answers and this device" }).click();
+	await expect(page.getByRole("dialog")).toBeVisible();
+	await check();
+	await page.getByRole("dialog").getByRole("button", { name: "Delete my answers" }).click();
+	await check();
+	await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+	await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+
+	// The first page of a form this browser has begun: continue, or forget.
+	await open(page);
+	await expect(page.getByRole("button", { name: "Forget it on this device" })).toBeVisible();
+	await check();
+}
+
+async function ownersPages(
+	page: Page,
+	browser: Browser,
+	id: string,
+	check: () => Promise<void>,
+): Promise<void> {
+	await page.goto("/login");
+	await expect(page.getByRole("button", { name: "Sign in" })).toBeEnabled();
+	await check();
+	await signUp(page);
+	await check();
+	await page.getByRole("link", { name: "New form" }).click();
+	await check();
+	await page.getByLabel("A Tally form's page").check();
+	await check();
+	await page.getByLabel("A definition (JSON)").check();
+	await page.goto("/forms");
+	await bringIn(page, id);
+	// Settings: the state, the versions, a new definition, deleting.
+	await check();
+	await page.getByRole("button", { name: "Open it for answers" }).click();
+	await expect(page.getByText("This form is open.")).toBeVisible();
+	await respond(browser, id, "A lot", { finish: true });
+	await respond(browser, id, "Very little", { finish: false });
+
+	await page.getByRole("button", { name: "Close it" }).click();
+	await expect(page.getByRole("dialog")).toBeVisible();
+	await check();
+	await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+
+	await tab(page, "Overview").click();
+	await expect(page.getByTestId("started")).toHaveText("2");
+	await check();
+	await page.getByText("The last question each got to").click();
+	await check();
+	for (const name of ["Items", "Questions", "Responses"]) {
+		await tab(page, name).click();
+		await expect(page.getByTestId("counted")).toBeVisible();
+		await check();
+	}
+	await page.locator("[data-response]").first().click();
+	await expect(page.getByRole("button", { name: "Delete this response" })).toBeVisible();
+	await check();
+	await tab(page, "Kept apart").click();
+	await expect(page.getByRole("status")).toBeVisible();
+	await check();
+	await page.goto("/account");
+	await expect(page.getByRole("button", { name: "Change password" })).toBeEnabled();
+	await check();
+}
+
+test.describe("what this slice added, on the narrowest phone", () => {
+	test.use({ viewport: { width: 320, height: 568 } });
+
+	test("a respondent's own answers: nothing scrolls sideways, every control takes a thumb", async ({
+		page,
+	}) => {
+		await respondentsOwn(page, () => expectFits(page));
+	});
+
+	test("the pages of someone who runs a form: the same", async ({ page, browser }, info) => {
+		await ownersPages(page, browser, freshId(info), () => expectFits(page));
+	});
+});
+
+test.describe("what this slice added, in a desk window zoomed to 200%", () => {
+	test.use({ viewport: { width: 640, height: 360 }, isMobile: false, hasTouch: false });
+
+	test("nothing scrolls sideways", async ({ page, browser }, info) => {
+		const check = async () => {
+			expect(await sidewaysOverflow(page)).toBe(0);
+		};
+		await respondentsOwn(page, check);
+		await ownersPages(page, browser, freshId(info), check);
+	});
 });

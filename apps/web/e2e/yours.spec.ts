@@ -1,5 +1,13 @@
+import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
 import { CONSENT, FORM, heading, open, skipTo, start } from "./helpers";
+
+/** Opens what a person can do about their own answers, from the options in the header. */
+async function openYourAnswers(page: Page): Promise<void> {
+	await page.getByRole("button", { name: "Options" }).click();
+	await page.getByRole("button", { name: "Your answers and this device" }).click();
+	await expect(page.getByRole("dialog")).toBeVisible();
+}
 
 test("withdraws a response that is not finished, and its answers are gone", async ({ page }) => {
 	await start(page);
@@ -8,7 +16,7 @@ test("withdraws a response that is not finished, and its answers are gone", asyn
 	const headers = { Authorization: `Bearer ${url.hash.slice(1)}` };
 	expect((await page.request.get(`/api/responses/${id}`, { headers })).status()).toBe(200);
 
-	await page.getByRole("button", { name: "Your answers and this device" }).click();
+	await openYourAnswers(page);
 	const dialog = page.getByRole("dialog");
 	await dialog.getByRole("button", { name: "Delete my answers" }).click();
 	// It asks once more before it does it.
@@ -43,7 +51,7 @@ test("forgets a response on this device, and leaves it where it is stored", asyn
 
 test("forgets from inside the form too, and goes back to its first page", async ({ page }) => {
 	await start(page);
-	await page.getByRole("button", { name: "Your answers and this device" }).click();
+	await openYourAnswers(page);
 	await page.getByRole("dialog").getByRole("button", { name: "Forget on this device" }).click();
 	await expect(page).toHaveURL(new RegExp(`${FORM}$`));
 	await expect(page.getByRole("button", { name: "Start" })).toBeEnabled();
