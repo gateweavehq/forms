@@ -14,7 +14,14 @@ import { RichTextView } from "./rich-text";
  * A form's first page: its title, and its consent when it has one. Nothing is stored and no
  * question is shown until the person agrees and starts; that is when their response is made.
  */
-export function StartPage({ definition }: { definition: Definition }) {
+export function StartPage({
+	definition,
+	closed = false,
+}: {
+	definition: Definition;
+	/** The form takes no new responses. One already begun on this device can still be finished. */
+	closed?: boolean;
+}) {
 	const navigate = useNavigate();
 	const { consent } = definition;
 	const [problem, setProblem] = useState<string>();
@@ -88,10 +95,16 @@ export function StartPage({ definition }: { definition: Definition }) {
 						{saved && (
 							<section className="flex flex-col gap-1 rounded-lg bg-accent px-4 py-3">
 								<h2 className="font-semibold">{strings.start.resumeTitle}</h2>
-								<p className="text-sm text-muted-foreground">{strings.start.startOver}</p>
+								{!closed && (
+									<p className="text-sm text-muted-foreground">{strings.start.startOver}</p>
+								)}
 							</section>
 						)}
-						{consent ? (
+						{closed ? (
+							<p role="status" className="font-medium">
+								{strings.start.closed}
+							</p>
+						) : consent ? (
 							<>
 								{consent.title && <h2 className="text-xl font-semibold">{consent.title}</h2>}
 								<RichTextView text={consent.text} />
@@ -117,8 +130,10 @@ export function StartPage({ definition }: { definition: Definition }) {
 						)}
 					</div>
 					<MadeWith className="sm:hidden" />
+					{/* A closed form with nothing begun on this device has nothing to press. */}
 					<div
 						data-bar
+						hidden={closed && !saved}
 						className="card-bar -mx-2 flex flex-col gap-2 bg-page px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:mx-0 sm:flex-row-reverse sm:justify-start sm:gap-3 sm:bg-transparent sm:px-0 sm:pt-4 sm:pb-0"
 					>
 						{saved && (
@@ -130,7 +145,7 @@ export function StartPage({ definition }: { definition: Definition }) {
 								{strings.start.resume}
 							</Button>
 						)}
-						{startButton}
+						{!closed && startButton}
 					</div>
 					<MadeWith className="mt-6 max-sm:hidden" />
 				</form>

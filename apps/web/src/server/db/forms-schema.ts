@@ -1,4 +1,5 @@
 import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { user } from "./auth-schema";
 
 /**
  * A form's definition as it was when someone started a response on it, under a hash of its
@@ -16,6 +17,32 @@ export const definition = sqliteTable(
 		json: text("json").notNull(),
 	},
 	(table) => [index("definition_form_idx").on(table.formId)],
+);
+
+/**
+ * A form someone brought in. Its id is what its address carries (`/f/<id>`) and what
+ * `response.form_id` and `definition.form_id` hold, so it never changes; its wording does, by
+ * pointing at a newer definition.
+ */
+export const form = sqliteTable(
+	"form",
+	{
+		id: text("id").primaryKey(),
+		/** The one account that may see its results. Teams and sharing are not built. */
+		ownerId: text("owner_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		title: text("title").notNull(),
+		/** `draft`: not answerable yet. `open`: takes responses. `closed`: takes no new ones. */
+		state: text("state", { enum: ["draft", "open", "closed"] }).notNull(),
+		/** The definition a new response starts under. */
+		definitionHash: text("definition_hash")
+			.notNull()
+			.references(() => definition.hash),
+		createdAt: integer("created_at").notNull(),
+		updatedAt: integer("updated_at").notNull(),
+	},
+	(table) => [index("form_owner_idx").on(table.ownerId)],
 );
 
 /**

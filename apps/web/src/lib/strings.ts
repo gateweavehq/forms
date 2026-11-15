@@ -47,6 +47,106 @@ export const strings = {
 		forms: "Your forms",
 		backToForms: "Your forms",
 		account: "Account",
+		newForm: "New form",
+		noForms: "You have no forms yet. Bring one in to get its link.",
+		failed: "That did not work. Check your connection and try again.",
+		cancel: "Cancel",
+		notFound: {
+			title: "There is no such form",
+			body: "It does not exist, or it belongs to another account.",
+		},
+		state: { draft: "Draft", open: "Open", closed: "Closed" },
+		counts: (started: number, completed: number) => `${started} started, ${completed} completed`,
+		examples: (count: number) =>
+			count === 1
+				? "This server has 1 example form for local development."
+				: `This server has ${count} example forms for local development.`,
+		addExamples: "Add them to my account",
+		nav: {
+			overview: "Overview",
+			questions: "Questions",
+			items: "Items",
+			responses: "Responses",
+			detached: "Kept apart",
+			settings: "Settings",
+		},
+		link: "The form's link",
+		newTitle: "Bring a form in",
+		newLead:
+			"There is no builder yet. A form comes in as a definition, or from the page of a form you already have on Tally. You see what it becomes before anything is stored, and it starts as a draft.",
+		bringIn: {
+			what: "What do you have?",
+			definition: "A definition (JSON)",
+			tally: "A Tally form's page",
+			definitionHelp:
+				"A definition is a JSON document in the shape docs/architecture.md describes. Its id becomes the form's address.",
+			tallyHelp:
+				"Open the form on Tally, save the page, and upload it here; or copy the JSON inside its __NEXT_DATA__ script. Only bring in forms you have the right to use.",
+			file: "Upload a file",
+			paste: "Or paste it",
+			fromFile: (name: string, characters: number) => `${name} (${characters} characters)`,
+			clearFile: "Remove the file",
+			acceptDifferences:
+				"Fold repeated questions even where copies differ, taking what most copies have",
+			detachEmail: "Store email questions apart from the answers",
+			id: "Address, if the one made from the title will not do",
+			idPlaceholder: "for example bread-at-home",
+			check: "Check it",
+			notValid: "This cannot be brought in as it is:",
+			outline: "What it becomes",
+			address: (id: string) => `Its address will be /f/${id}`,
+			withConsent: "starts with a consent",
+			withoutConsent: "no consent step",
+			questions: (count: number) => (count === 1 ? "1 question" : `${count} questions`),
+			repeat: (items: number[], questions: number) =>
+				`${items.reduce((sum, count) => sum + count, 0)} items in ${items.length} ${items.length === 1 ? "group" : "groups"} (${items.join(", ")}), ${questions} ${questions === 1 ? "question" : "questions"} for each`,
+			source: (pages: number, blocks: number, rules: number) =>
+				`The Tally form has ${pages} pages, ${blocks} blocks and ${rules} rules.`,
+			folded: (pages: number[], items: number) =>
+				`Pages ${pages.join(", ")} repeat the same questions for ${items} items, and were folded into one section.`,
+			settled: (count: number) =>
+				count === 1
+					? "1 difference between the copies was settled by what most of them have:"
+					: `${count} differences between the copies were settled by what most of them have:`,
+			notFolded: (pages: number[], items: number) =>
+				`Pages ${pages.join(", ")} look like the same questions repeated for ${items} items, and were not folded: the copies differ in more than the item's name.`,
+			notFoldedHelp:
+				"Correct them on Tally and bring the page in again, or tick the box above to take what most copies have.",
+			notes: "Changed or left out on the way:",
+			difference: (item: string, where: string, found: string, expected: string) =>
+				`${item}, ${where}: "${found}" where most have "${expected}"`,
+			create: "Bring it in as a draft",
+			replace: "Use this definition from now on",
+		},
+		settings: {
+			stateTitle: "Taking answers",
+			draft: "This form is a draft. Its link says it is not open yet.",
+			open: "This form is open. Anyone with its link can answer it.",
+			closed:
+				"This form is closed. Its link says so, and nobody can start it. Someone who had begun can still finish.",
+			openIt: "Open it for answers",
+			closeIt: "Close it",
+			closeTitle: "Close this form?",
+			closeBody:
+				"Its link will say that it is closed, and nobody will be able to start. Nothing is deleted, and you can open it again.",
+			versionsTitle: "Versions of the definition",
+			versionsLead:
+				"A response keeps the definition it started under. Results are shown per version.",
+			version: (hash: string) => `Version ${hash.slice(0, 8)}`,
+			current: "current: new responses start under it",
+			replaceTitle: "A new definition",
+			replaceLead:
+				"Editing a form means bringing in a new definition with the same id. Responses already begun keep the one they started under.",
+			deleteTitle: "Delete every response",
+			deleteLead: (responses: number, answers: number, detached: number) =>
+				`This form holds ${responses} ${responses === 1 ? "response" : "responses"} with ${answers} ${answers === 1 ? "answer" : "answers"}, and ${detached} ${detached === 1 ? "answer" : "answers"} kept apart.`,
+			deleteAll: "Delete all responses",
+			deleteAllTitle: "Delete every response of this form?",
+			deleteAllBody:
+				"This removes all of them for good, the answers kept apart included. The form, its link and its definitions stay. Export first if you need the data.",
+			deleteAllConfirm: (responses: number) =>
+				`Delete ${responses} ${responses === 1 ? "response" : "responses"}`,
+		},
 	},
 	notFound: {
 		title: "Page not found",
@@ -56,6 +156,10 @@ export const strings = {
 		title: "There is no such form",
 		body: "Check the link you were sent. It may have been cut short on the way.",
 	},
+	formDraft: {
+		title: "This form is not open yet",
+		body: "Whoever sent you the link has not opened it for answers. Try again later.",
+	},
 	error: {
 		title: "Something went wrong",
 		body: "This page could not be loaded.",
@@ -63,6 +167,7 @@ export const strings = {
 	},
 	start: {
 		begin: "Start",
+		closed: "This form is closed and takes no new answers. Thank you for coming.",
 		/** Shown when the consent's box is not ticked. */
 		consentNeeded: "Tick the box to take part.",
 		failed: "The form could not be started. Check your connection and try again.",

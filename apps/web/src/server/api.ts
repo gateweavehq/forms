@@ -124,6 +124,9 @@ async function responseOf(request: Request, id: string): Promise<ResponseRow> {
 export function startResponse(request: Request, formId: string): Promise<Response> {
 	return answering(async () => {
 		const form = await formOf(formId);
+		// A draft does not exist for a respondent yet. A closed form does, and says so.
+		if (form.state === "draft") throw new Refusal(404, "There is no such form.");
+		if (form.state === "closed") throw new Refusal(403, "This form is closed.");
 		const body = await readBody(request, createBody);
 		await withinCeiling(
 			env.START_LIMIT,
