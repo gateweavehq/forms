@@ -1,6 +1,7 @@
 import type { ItemSummary, RepeatTable } from "@gateweave/forms-results";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { Bar, Counted, Nothing, QuestionCard, shareOf } from "#/components/owner/results";
+import { duration } from "#/lib/format";
 import { getResults, type ResultsOf } from "#/lib/results";
 import { strings } from "#/lib/strings";
 
@@ -26,7 +27,7 @@ function ItemsPage() {
 	const { frame, tables } = Route.useLoaderData();
 	return (
 		<>
-			<Counted frame={frame} />
+			<Counted frame={frame} from={Route.fullPath} />
 			{frame.counted === 0 && <Nothing frame={frame} />}
 			{tables.length === 0 && <p className="text-muted-foreground">{t.noItems}</p>}
 			{frame.counted > 0 && tables.map((table) => <Table key={table.id} table={table} />)}
@@ -71,6 +72,9 @@ function Table({ table }: { table: RepeatTable }) {
 												{option.label}
 											</th>
 										))}
+										<th scope="col" className="px-3 py-2 font-medium">
+											{t.itemTime}
+										</th>
 									</tr>
 								</thead>
 								<tbody>
@@ -92,6 +96,9 @@ function Table({ table }: { table: RepeatTable }) {
 														/>
 													</td>
 												))}
+												<td className="px-3 py-2 tabular-nums">
+													{status?.medianMs == null ? "" : duration(status.medianMs)}
+												</td>
 											</tr>
 										);
 									})}
@@ -109,6 +116,7 @@ function Table({ table }: { table: RepeatTable }) {
 											<span className="min-w-0 font-medium break-words">{item.label}</span>
 											<span className="shrink-0 text-sm text-muted-foreground">
 												{t.itemAnswered}: {status?.answered ?? 0}
+												{status?.medianMs != null && ` · ${duration(status.medianMs)}`}
 											</span>
 										</div>
 										<ul className="flex flex-col gap-1.5 text-sm">

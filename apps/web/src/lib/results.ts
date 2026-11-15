@@ -64,28 +64,29 @@ export const getResults = createServerFn({ method: "GET" })
 			}
 			// "Fast" is measured against every completed response of the version, filtered or not.
 			const signals = results.signals(definition, all);
+			const signalsOf = new Map(signals.responses.map((entry) => [entry.id, entry]));
 			const kept = new Set(counted.map(({ id }) => id));
 			return {
 				view: data.view,
 				frame,
 				medianMs: signals.medianMs,
+				// Newest first: the one that just came in is the one being looked for.
 				responses: all
 					.filter(({ id }) => kept.has(id))
-					.map((record, index) => ({
+					.reverse()
+					.map((record) => ({
 						id: record.id,
 						device: record.device,
 						createdAt: record.createdAt,
 						completedAt: record.completedAt,
-						signals: signals.responses.find(({ id }) => id === record.id) ?? {
+						signals: signalsOf.get(record.id) ?? {
 							id: record.id,
 							activeMs: 0,
 							fast: false,
 							straight: [],
 							changes: 0,
 						},
-						order: index,
-					}))
-					.reverse(),
+					})),
 			};
 		} catch (error) {
 			if (error instanceof NotFound) return null;

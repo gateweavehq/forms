@@ -230,6 +230,6 @@ export const responses: ResponseRecord[] = [
 		{ completed: false, position: "q:owned" },
 		{ plays: [{ option: "monthly" }, 500] },
 	),
-	// Not complete, at a place this form does not have.
+	// Not complete, with a saved place this form does not have and no answer.
 	response("r8", "desk", { completed: false, position: "q:gone" }, {}),
 ];

@@ -1,5 +1,5 @@
 import type { QuestionSummary } from "@gateweave/forms-results";
-import { getRouteApi } from "@tanstack/react-router";
+import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { duration, percent, rounded } from "#/lib/format";
 import type { ResultsFrame, ResultsSearch } from "#/lib/results";
@@ -9,6 +9,13 @@ import { Button } from "../button";
 const t = strings.owner.results;
 const form = getRouteApi("/forms/$form");
 const select = "min-h-11 w-full rounded-md border border-input bg-background px-3 text-base";
+
+/** The results pages that count responses, by their routes' paths. */
+export type ResultsPage =
+	| "/forms/$form/"
+	| "/forms/$form/questions"
+	| "/forms/$form/items"
+	| "/forms/$form/responses/";
 
 /**
  * A bar as long as a share. It is drawn as an SVG with the length in an attribute, because the
@@ -36,10 +43,21 @@ export function shareOf(count: number, whole: number): string {
  * What every results page begins with: which version, which responses are counted, and how
  * many that is. A number without its n says nothing, so the n is always here.
  */
-export function Counted({ frame, children }: { frame: ResultsFrame; children?: ReactNode }) {
+export function Counted({
+	frame,
+	from,
+	children,
+}: {
+	frame: ResultsFrame;
+	/** The page this is on. A filter changes that page's address and stays on it. */
+	from: ResultsPage;
+	children?: ReactNode;
+}) {
 	const { versions } = form.useLoaderData();
 	const search: ResultsSearch = form.useSearch();
-	const navigate = form.useNavigate();
+	// From the page it is on, not from the form's route: navigating from that one leads to the
+	// overview, and a filter must not move the person to another tab.
+	const navigate = useNavigate({ from });
 	const change = (next: Partial<ResultsSearch>) =>
 		void navigate({ search: (previous) => ({ ...previous, ...next }), replace: true });
 	const filtered = search.device !== undefined || search.q !== undefined;

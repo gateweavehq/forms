@@ -61,8 +61,24 @@ describe("the overview", () => {
 			},
 			{ sectionId: "last", section: "Last thing", count: 0 },
 		]);
-		expect(result.stoppedAtStart).toBe(1);
-		expect(result.stoppedElsewhere).toBe(1);
+		// r6 saved nothing; r8 only a position, which is the browser's word and not counted.
+		expect(result.stoppedAtStart).toBe(2);
+	});
+
+	it("names the last question each of them answered or passed, in the form's order", () => {
+		expect(result.lastQuestions).toEqual([
+			{ key: "q:plays", label: "How often do you play?", count: 1 },
+			{ key: "i:chess:played", label: "Have you played Chess?", count: 1 },
+		]);
+	});
+
+	it("counts two responses that stopped at the same question once, with both", () => {
+		const [, , , , fifth] = responses;
+		if (!fifth) throw new Error("There is no fifth response");
+		const twice = overview(games, [fifth, { ...fifth, id: "r5b" }]);
+		expect(twice.lastQuestions).toEqual([
+			{ key: "i:chess:played", label: "Have you played Chess?", count: 2 },
+		]);
 	});
 
 	it("has no share and no medians when nothing was started", () => {

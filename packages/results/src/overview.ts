@@ -1,4 +1,12 @@
-import { type Definition, placesOf } from "@gateweave/forms-schema";
+import {
+	type Definition,
+	flow,
+	getAnswer,
+	isAsking,
+	itemOf,
+	mergeItem,
+	placesOf,
+} from "@gateweave/forms-schema";
 import { median, share } from "./numbers";
 import { activeMsOf, DEVICES, type Device, type ResponseRecord } from "./records";
 
@@ -8,7 +16,16 @@ export interface StoppingPlace {
 	section: string;
 	groupId?: string;
 	group?: string;
-	/** Responses that are not complete and were last here. */
+	/** Responses that are not complete and got no further than here. */
+	count: number;
+}
+
+/** A question that was the last one some unfinished responses got to. */
+export interface LastQuestion {
+	/** The step's key, as the flow names it. */
+	key: string;
+	/** The question's wording, for an item's question with the item's name filled in. */
+	label: string;
 	count: number;
 }
 
@@ -19,54 +36,31 @@ export interface Overview {
 	completedShare: number | null;
 	/** The median active time of completed responses, for all of them and by device. */
 	activeTime: Array<{ device: Device | "all"; completed: number; medianMs: number | null }>;
-	/** Where the responses that are not complete were last, in the form's order. */
+	/** How many unfinished responses stopped in each part of the form, in its order. */
 	stopped: StoppingPlace[];
-	/** Not complete, and no place was ever saved: they agreed to start and did nothing more. */
+	/** The questions they stopped at, in the form's order. Only those where someone did. */
+	lastQuestions: LastQuestion[];
+	/** Not complete, and nothing was answered or passed: they started and did nothing more. */
 	stoppedAtStart: number;
-	/** Not complete, at a place this definition does not have. */
-	stoppedElsewhere: number;
 }
 
 /**
- * The place a saved position is in: `s:<section>`, `q:<question>`, `i:<item>:<question>` or
- * `f:<group>`, as the flow writes its steps' keys. The browser sends the position, so one that
- * names nothing in the form is expected and counted apart.
+ * The last question of its own flow that an unfinished response answered or passed. The flow is
+ * worked out from the response's answers, so this is where the person was, by what the server
+ * holds. The position a browser saves is not used: it is the browser's word, and it moves when
+ * someone only looks back.
  */
-function placeOf(
-	definition: Definition,
-	position: string,
-): { sectionId: string; groupId?: string } | undefined {
-	const [kind, first = ""] = position.split(":");
-	const places = placesOf(definition);
-	if (kind === "s") {
-		const section = definition.sections.find(({ id }) => id === first);
-		if (!section) return undefined;
-		// A repeat section's own step comes before its first group.
-		const group = section.type === "repeat" ? section.groups[0] : undefined;
-		return { sectionId: section.id, ...(group ? { groupId: group.id } : {}) };
-	}
-	if (kind === "q") {
-		const place = places.questions.get(first);
-		return place && place.part === undefined ? { sectionId: place.section.id } : undefined;
-	}
-	if (kind === "i") {
-		const place = places.items.get(first);
-		return place ? { sectionId: place.section.id, groupId: place.group.id } : undefined;
-	}
-	if (kind === "f") {
-		for (const section of definition.sections) {
-			if (section.type !== "repeat") continue;
-			if (section.groups.some(({ id }) => id === first)) {
-				return { sectionId: section.id, groupId: first };
-			}
-		}
-	}
-	return undefined;
+function lastStep(definition: Definition, record: ResponseRecord) {
+	const asked = flow(definition, record.answers).filter(isAsking);
+	return asked.findLast(
+		(step) => getAnswer(record.answers, step.questionId, itemOf(step)) !== undefined,
+	);
 }
 
 export function overview(definition: Definition, records: ResponseRecord[]): Overview {
 	const completed = records.filter((record) => record.completedAt !== null);
 	const open = records.filter((record) => record.completedAt === null);
+	const places = placesOf(definition);
 
 	const stopped: StoppingPlace[] = definition.sections.flatMap((section) =>
 		section.type === "questions"
@@ -79,22 +73,35 @@ export function overview(definition: Definition, records: ResponseRecord[]): Ove
 					count: 0,
 				})),
 	);
+	/** By step key, with the place of the step in the response's flow to order them by. */
+	const last = new Map<string, LastQuestion & { order: number }>();
 	let stoppedAtStart = 0;
-	let stoppedElsewhere = 0;
 	for (const record of open) {
-		if (record.position === null) {
+		const step = lastStep(definition, record);
+		if (!step) {
 			stoppedAtStart++;
 			continue;
 		}
-		const place = placeOf(definition, record.position);
-		const row = place
-			? stopped.find(
-					(candidate) =>
-						candidate.sectionId === place.sectionId && candidate.groupId === place.groupId,
-				)
-			: undefined;
+		const groupId = step.kind === "question" ? undefined : step.groupId;
+		const row = stopped.find(
+			(candidate) => candidate.sectionId === step.sectionId && candidate.groupId === groupId,
+		);
 		if (row) row.count++;
-		else stoppedElsewhere++;
+
+		const known = last.get(step.key);
+		if (known) {
+			known.count++;
+			continue;
+		}
+		const question = places.questions.get(step.questionId);
+		const item = step.kind === "question" ? undefined : places.items.get(step.itemId);
+		const label = question?.question.label ?? step.questionId;
+		last.set(step.key, {
+			key: step.key,
+			label: item ? mergeItem(label, item.item) : label,
+			count: 1,
+			order: orderOf(definition, step.sectionId, groupId, question?.order ?? 0),
+		});
 	}
 
 	return {
@@ -106,7 +113,29 @@ export function overview(definition: Definition, records: ResponseRecord[]): Ove
 			return { device, completed: own.length, medianMs: median(own.map(activeMsOf)) };
 		}),
 		stopped,
+		lastQuestions: [...last.values()]
+			.sort((a, b) => a.order - b.order)
+			.map(({ key, label, count }) => ({ key, label, count })),
 		stoppedAtStart,
-		stoppedElsewhere,
 	};
+}
+
+/**
+ * A number that puts stopping points in the form's order: by section, then by group, then by
+ * the question's place. Items of one group and question share it, and keep the order they were
+ * first seen in.
+ */
+function orderOf(
+	definition: Definition,
+	sectionId: string,
+	groupId: string | undefined,
+	question: number,
+): number {
+	const sectionIndex = definition.sections.findIndex(({ id }) => id === sectionId);
+	const section = definition.sections[sectionIndex];
+	const groupIndex =
+		section?.type === "repeat" && groupId !== undefined
+			? section.groups.findIndex(({ id }) => id === groupId)
+			: 0;
+	return sectionIndex * 1e10 + groupIndex * 1e6 + question;
 }

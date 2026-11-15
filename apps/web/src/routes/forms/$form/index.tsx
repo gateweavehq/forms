@@ -28,7 +28,7 @@ function OverviewPage() {
 
 	return (
 		<>
-			<Counted frame={frame} />
+			<Counted frame={frame} from={Route.fullPath} />
 			{frame.counted === 0 ? (
 				<Nothing frame={frame} />
 			) : (
@@ -94,15 +94,6 @@ function OverviewPage() {
 											label: place.group ? `${place.section}: ${place.group}` : place.section,
 											count: place.count,
 										})),
-										...(overview.stoppedElsewhere > 0
-											? [
-													{
-														key: "elsewhere",
-														label: t.stoppedElsewhere,
-														count: overview.stoppedElsewhere,
-													},
-												]
-											: []),
 									].map((place) => (
 										<li key={place.key} className="flex flex-col gap-1">
 											<div className="flex items-baseline justify-between gap-3">
@@ -113,6 +104,24 @@ function OverviewPage() {
 										</li>
 									))}
 								</ul>
+								{overview.lastQuestions.length > 0 && (
+									<details>
+										<summary className="min-h-11 cursor-pointer py-2.5 font-medium">
+											{t.lastQuestions}
+										</summary>
+										<ul className="flex flex-col divide-y rounded-xl border">
+											{overview.lastQuestions.map((question) => (
+												<li
+													key={question.key}
+													className="flex items-baseline justify-between gap-3 px-4 py-2.5"
+												>
+													<span className="min-w-0 break-words">{question.label}</span>
+													<span className="shrink-0 tabular-nums">{question.count}</span>
+												</li>
+											))}
+										</ul>
+									</details>
+								)}
 							</>
 						)}
 					</section>

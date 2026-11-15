@@ -21,7 +21,7 @@ function ResponsesPage() {
 	const { form } = Route.useParams();
 	return (
 		<>
-			<Counted frame={frame} />
+			<Counted frame={frame} from={Route.fullPath} />
 			{frame.counted === 0 && <Nothing frame={frame} />}
 			{medianMs !== null && (
 				<p className="text-sm text-muted-foreground">{t.signalsLead(duration(medianMs))}</p>

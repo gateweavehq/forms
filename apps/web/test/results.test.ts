@@ -131,6 +131,9 @@ describe("the overview", () => {
 		expect(html).toContain("67%");
 		// The one that is not complete last saved in the first section.
 		expect(html).toContain("1 response was started and not completed.");
+		// It answered the first question and no other, so that is where it stopped.
+		const last = html.slice(html.indexOf("The last question each got to"));
+		expect(last).toContain("How much light does your home get?");
 	});
 
 	it("counts only one kind of device when asked", async () => {

@@ -146,11 +146,11 @@ export const strings = {
 			stoppedTitle: "Where the unfinished ones stopped",
 			stoppedLead: (count: number) =>
 				count === 1
-					? "1 response was started and not completed. This is the last place it saved."
-					: `${count} responses were started and not completed. This is the last place each saved.`,
+					? "1 response was started and not completed. This is how far it got: the part of the form with the last question it answered or passed."
+					: `${count} responses were started and not completed. This is how far each got: the part of the form with the last question it answered or passed.`,
+			lastQuestions: "The last question each got to",
 			stoppedNone: "Every response that was started was completed.",
 			stoppedAtStart: "Before the first question",
-			stoppedElsewhere: "At a place this version does not have",
 			seen: (answered: number, seen: number) => `${answered} answered of ${seen} shown`,
 			median: (time: string) => `median ${time} on screen`,
 			changes: (count: number) => (count === 1 ? "changed once" : `changed ${count} times`),
@@ -169,6 +169,7 @@ export const strings = {
 			noItems: "This version has no section that repeats questions for items.",
 			item: "Item",
 			itemAnswered: "Answered",
+			itemTime: "Median time",
 			followUps: "Follow-up questions",
 			followUpsLead: "Asked only after certain answers, so each is out of the few who saw it.",
 			followUpsOf: (item: string, count: number) =>

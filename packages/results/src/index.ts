@@ -7,7 +7,7 @@ export {
 	toCsv,
 } from "./csv";
 export { mean, median, share } from "./numbers";
-export { type Overview, overview, type StoppingPlace } from "./overview";
+export { type LastQuestion, type Overview, overview, type StoppingPlace } from "./overview";
 export {
 	activeMsOf,
 	answersOf,

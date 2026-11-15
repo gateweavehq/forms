@@ -17,7 +17,7 @@ function QuestionsPage() {
 	const { frame, sections } = Route.useLoaderData();
 	return (
 		<>
-			<Counted frame={frame} />
+			<Counted frame={frame} from={Route.fullPath} />
 			{frame.counted === 0 && <Nothing frame={frame} />}
 			{sections.length === 0 && (
 				<p className="text-muted-foreground">{strings.owner.results.noQuestions}</p>
