@@ -3,6 +3,7 @@ export {
 	type Answer,
 	answerSchema,
 	answerValueSchema,
+	emailSchema,
 	emptyAnswers,
 	getAnswer,
 	MAX_LONG_TEXT,

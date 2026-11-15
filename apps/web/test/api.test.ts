@@ -222,6 +222,20 @@ describe("saving answers as they are given", () => {
 		]);
 	});
 
+	it("brings a time that cannot be into range, and keeps the answer", async () => {
+		const started = await start();
+		// A tab left open for a week, a clock that ran backwards, and a fraction.
+		const long = await progress(started, answer("often", { option: "weekly" }, undefined, 6e8));
+		const negative = await progress(started, answer("years", 3, undefined, -5));
+		const fraction = await progress(started, answer("oven", { option: "gas" }, undefined, 10.6));
+		expect([long.status, negative.status, fraction.status]).toEqual([200, 200, 200]);
+		expect((await read(started)).answers.questions).toMatchObject({
+			often: { value: { option: "weekly" }, activeMs: 86_400_000 },
+			years: { value: 3, activeMs: 0 },
+			oven: { value: { option: "gas" }, activeMs: 11 },
+		});
+	});
+
 	it("does not count the same options ticked in another order as a change", async () => {
 		const started = await start();
 		await progress(started, answer("reasons", { options: ["taste", "cost"] }));
@@ -253,7 +267,6 @@ describe("saving answers as they are given", () => {
 				answer("made", { option: "never" }, "croissant"),
 			],
 			["an item for a question that is asked once", answer("often", { option: "weekly" }, "pita")],
-			["a time that cannot be", answer("often", { option: "weekly" }, undefined, -5)],
 			["a place that is not one", { position: "<script>" }],
 			["a key it does not know", { position: "q:years", note: "hello" }],
 		];

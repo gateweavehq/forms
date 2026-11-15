@@ -171,6 +171,7 @@ function Answering({
 	const [completed, setCompleted] = useState(initial.completed);
 	const [finishing, setFinishing] = useState<"no" | "sending" | "failed">("no");
 	const [failing, setFailing] = useState(false);
+	const [refused, setRefused] = useState(false);
 	const [announcement, setAnnouncement] = useState("");
 	const [autoAdvance, setAutoAdvance] = useState(true);
 
@@ -179,6 +180,11 @@ function Answering({
 		queue.current = new SaveQueue(
 			(progress) => sendProgress(responseId, secret, progress),
 			setFailing,
+			// Only an answer the server would not take is the person's business. A refused note
+			// of where they are costs them nothing.
+			(progress) => {
+				if (progress.answer) setRefused(true);
+			},
 		);
 	}
 	const clock = useRef<ActiveClock | undefined>(undefined);
@@ -376,6 +382,17 @@ function Answering({
 					<span>{strings.saving.failed}</span>
 					<Button variant="outline" onClick={() => queue.current?.retry()}>
 						{strings.saving.retry}
+					</Button>
+				</div>
+			)}
+			{refused && (
+				<div
+					role="alert"
+					className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive px-3 py-2 text-sm"
+				>
+					<span>{strings.saving.refused}</span>
+					<Button variant="outline" onClick={() => setRefused(false)}>
+						{strings.saving.dismiss}
 					</Button>
 				</div>
 			)}

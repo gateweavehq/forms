@@ -1,4 +1,4 @@
-import type { AnswerValue, Question } from "@gateweave/forms-schema";
+import { type AnswerValue, answerValueSchema, type Question } from "@gateweave/forms-schema";
 import { describe, expect, it } from "vitest";
 import { type Draft, fromDraft, isEmptyDraft, toDraft } from "./draft";
 
@@ -72,6 +72,15 @@ describe("what the inputs hold, as an answer", () => {
 			value: "someone@example.test",
 		});
 		expect(fromDraft(email, draft({ text: "someone" })).ok).toBe(false);
+		// What the server refuses, the page refuses too: an address the page let through and
+		// the server did not would be lost without a word.
+		for (const text of ["someone@example.c", "someone@example", "some one@example.test"]) {
+			expect(fromDraft(email, draft({ text })), text).toEqual({
+				ok: false,
+				problem: "Enter an email address, or leave it empty.",
+			});
+			expect(answerValueSchema(email).safeParse(text).success, text).toBe(false);
+		}
 		expect(fromDraft(email, empty)).toEqual({ ok: true, value: null });
 	});
 

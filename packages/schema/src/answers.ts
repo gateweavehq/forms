@@ -77,6 +77,12 @@ function specifying(options: Option[]): Set<string> {
 const shortText = z.string().min(1).max(MAX_SHORT_TEXT);
 
 /**
+ * What counts as an email address. The page and the server both ask this, so that the page never
+ * lets through an address the server will then refuse.
+ */
+export const emailSchema = z.email().max(254);
+
+/**
  * What an answer to this question may be. Used where an answer arrives from outside: the server
  * checks every answer it is sent with this before storing it.
  */
@@ -87,7 +93,7 @@ export function answerValueSchema(question: Question): z.ZodType<AnswerValue> {
 		case "long_text":
 			return z.string().min(1).max(MAX_LONG_TEXT);
 		case "email":
-			return z.email().max(254);
+			return emailSchema;
 		case "number": {
 			let number = z.number();
 			if (question.integer) number = number.int();

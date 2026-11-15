@@ -11,15 +11,26 @@ const RETRY_DELAYS = [1_000, 2_000, 5_000, 10_000, 30_000];
 export class SaveQueue {
 	readonly #send: (progress: Progress) => Promise<void>;
 	readonly #onFailing: (failing: boolean) => void;
+	readonly #onRefused: (progress: Progress) => void;
 	readonly #waiting: Progress[] = [];
 	#sending = false;
 	#failures = 0;
 	#timer: ReturnType<typeof setTimeout> | undefined;
 	#idle: Array<() => void> = [];
 
-	constructor(send: (progress: Progress) => Promise<void>, onFailing: (failing: boolean) => void) {
+	/**
+	 * `onFailing` hears when sending starts and stops failing for lack of a connection.
+	 * `onRefused` hears of each thing the server would not take: it is not sent again, and the
+	 * person has to be told, since what they answered is not stored.
+	 */
+	constructor(
+		send: (progress: Progress) => Promise<void>,
+		onFailing: (failing: boolean) => void,
+		onRefused: (progress: Progress) => void,
+	) {
 		this.#send = send;
 		this.#onFailing = onFailing;
+		this.#onRefused = onRefused;
 	}
 
 	/** Adds something to send, after everything already waiting. */
@@ -67,6 +78,7 @@ export class SaveQueue {
 					this.#failed();
 					return;
 				}
+				this.#onRefused(next);
 			}
 			this.#waiting.shift();
 			if (this.#failures > 0) {

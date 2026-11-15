@@ -622,3 +622,22 @@ test("announces moving on, and honours reduced motion", async ({ page }) => {
 	await expect(heading(page, "Sourdough loaf")).toBeVisible();
 	await expect(page.locator("form")).toHaveCSS("animation-name", "none");
 });
+
+test("tells the person when the server would not take an answer", async ({ page }) => {
+	await start(page);
+	await forward(page);
+	// The server's refusal of one answer, whatever its reason.
+	await page.route("**/api/responses/*/progress", (route) =>
+		route.fulfill({ status: 400, json: { error: "This is not an answer the question can take." } }),
+	);
+	await choose(page, "Most weeks");
+	await forward(page);
+	// The person has moved on, as always. What they hear is that an answer did not get there.
+	await expect(heading(page, "For how many years have you baked bread at home?")).toBeVisible();
+	const alert = page.getByRole("alert");
+	await expect(alert).toContainText("One of your answers could not be saved");
+	await page.unroute("**/api/responses/*/progress");
+	await alert.getByRole("button", { name: "OK" }).click();
+	await expect(alert).toHaveCount(0);
+	expect((await stored(page)).answers.questions).not.toHaveProperty("often");
+});

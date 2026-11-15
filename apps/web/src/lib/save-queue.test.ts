@@ -29,7 +29,11 @@ describe("the save queue", () => {
 
 	it("sends in the order things were given", async () => {
 		const { arrived, send } = server();
-		const queue = new SaveQueue(send, () => {});
+		const queue = new SaveQueue(
+			send,
+			() => {},
+			() => {},
+		);
 		queue.push({ position: "q:one" });
 		queue.push({ position: "q:two" });
 		queue.push({ position: "q:three" });
@@ -40,7 +44,11 @@ describe("the save queue", () => {
 	it("keeps what did not arrive and sends it again, still in order", async () => {
 		const { arrived, send, fail } = server();
 		const failing: boolean[] = [];
-		const queue = new SaveQueue(send, (state) => failing.push(state));
+		const queue = new SaveQueue(
+			send,
+			(state) => failing.push(state),
+			() => {},
+		);
 		fail(new RequestFailed(0));
 		queue.push({ position: "q:one" });
 		queue.push({ position: "q:two" });
@@ -57,7 +65,11 @@ describe("the save queue", () => {
 
 	it("waits longer after each failure, and can be told to try now", async () => {
 		const { arrived, send, fail } = server();
-		const queue = new SaveQueue(send, () => {});
+		const queue = new SaveQueue(
+			send,
+			() => {},
+			() => {},
+		);
 		fail(new RequestFailed(503));
 		queue.push({ position: "q:one" });
 		await vi.advanceTimersByTimeAsync(1_000);
@@ -74,10 +86,17 @@ describe("the save queue", () => {
 	it("drops what the server refused, so that it does not hold back what comes after", async () => {
 		const { arrived, send, fail } = server();
 		const failing: boolean[] = [];
-		const queue = new SaveQueue(send, (state) => failing.push(state));
+		const refused: Array<string | undefined> = [];
+		const queue = new SaveQueue(
+			send,
+			(state) => failing.push(state),
+			(progress) => refused.push(progress.position),
+		);
 		fail(new RequestFailed(400));
 		queue.push({ position: "q:refused" });
 		await queue.settled();
+		// It is gone from the queue, and never silently: whoever owns the queue is told which.
+		expect(refused).toEqual(["q:refused"]);
 		fail(undefined);
 		queue.push({ position: "q:next" });
 		await queue.settled();
@@ -86,7 +105,11 @@ describe("the save queue", () => {
 	});
 
 	it("is settled at once when nothing is waiting", async () => {
-		const queue = new SaveQueue(server().send, () => {});
+		const queue = new SaveQueue(
+			server().send,
+			() => {},
+			() => {},
+		);
 		await expect(queue.settled()).resolves.toBeUndefined();
 	});
 });

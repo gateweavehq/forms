@@ -93,6 +93,10 @@ export const strings = {
 	saving: {
 		failed: "Your last answer has not been saved yet. Check your connection.",
 		retry: "Try again",
+		/** The server would not take an answer. It is not stored, and the person has to know. */
+		refused:
+			"One of your answers could not be saved, because the form did not accept it. Go back to it and answer again.",
+		dismiss: "OK",
 	},
 	elsewhere: {
 		open: "Continue on another device",

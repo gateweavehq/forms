@@ -1,5 +1,6 @@
 import {
 	type AnswerValue,
+	emailSchema,
 	isChoice,
 	isChoices,
 	isFields,
@@ -94,10 +95,8 @@ function read(question: Question, draft: Draft): Checked {
 		case "email": {
 			const text = draft.text.trim();
 			if (text === "") return answer(null);
-			// Deliberately loose: the server decides. This catches a missing @ or domain.
-			return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text)
-				? answer(text)
-				: problem(strings.problem.email);
+			// The server's own check, so that what passes here is not refused there.
+			return emailSchema.safeParse(text).success ? answer(text) : problem(strings.problem.email);
 		}
 		case "number": {
 			if (draft.text.trim() === "") return answer(null);

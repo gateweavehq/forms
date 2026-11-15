@@ -32,7 +32,9 @@ const progressBody = z.strictObject({
 			question: z.string().min(1).max(64),
 			item: z.string().min(1).max(64).optional(),
 			value: z.unknown(),
-			activeMs: z.number().int().min(0).max(MAX_ACTIVE_MS),
+			// Any number: a time that cannot be is brought into range, not refused. Refusing would
+			// throw the answer away with it, over a clock that ran in a tab left open for days.
+			activeMs: z.number(),
 		})
 		.optional(),
 	position: z.string().min(1).max(160).optional(),
@@ -155,6 +157,10 @@ export function postProgress(request: Request, id: string): Promise<Response> {
 	return answering(async () => {
 		const row = await responseOf(request, id);
 		const body = await readBody(request, progressBody);
+		if (body.answer) {
+			const { activeMs } = body.answer;
+			body.answer.activeMs = Math.min(Math.max(Math.round(activeMs), 0), MAX_ACTIVE_MS);
+		}
 		await saveProgress(createDb(env.DB), await formOf(row.formId), row, body);
 		return json({ saved: true });
 	});
