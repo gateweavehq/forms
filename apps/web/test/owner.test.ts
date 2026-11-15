@@ -128,6 +128,25 @@ describe("bringing a form in", () => {
 		expect(await other.text()).toBe(await own.text());
 	});
 
+	it("does not hand the answers left under an id to whoever takes it next", async () => {
+		// A form whose account is gone leaves its responses behind.
+		const { id } = await ownerWithForm();
+		expect((await start(id)).status).toBe(201);
+		await forms.db.prepare("DELETE FROM form WHERE id = ?").bind(id).run();
+		const next = await signUp(forms);
+		const taken = await call(next, "POST", "forms", { definition: plantForm(id) });
+		expect(taken.status).toBe(409);
+		expect(await formRow(id)).toBeNull();
+
+		// The same for answers kept apart, and in the words an id in use gets.
+		await forms.db
+			.prepare("INSERT INTO detached_answer (id, form_id, answers) VALUES (7, 'left-behind', '{}')")
+			.run();
+		const kept = await call(next, "POST", "forms", { definition: plantForm("left-behind") });
+		expect(kept.status).toBe(409);
+		expect((await kept.text()).replaceAll("left-behind", id)).toBe(await taken.text());
+	});
+
 	it("takes nothing larger than a form can be", async () => {
 		const cookie = await signUp(forms);
 		const response = await call(cookie, "POST", "preview", {

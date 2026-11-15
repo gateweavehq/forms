@@ -170,24 +170,34 @@ function checked(input: unknown): Definition {
 	return parsed.definition;
 }
 
-/** Brings a form in as a draft that belongs to this person. Its id has to be free. */
+/**
+ * Brings a form in as a draft that belongs to this person. Its id has to be free: no form has
+ * it, and nothing was ever answered under it. Responses can outlive their form (an example
+ * that is no longer served, an account that was removed), and whoever then took the id would
+ * be shown them. `adopt` lifts that for the made-up examples, whose answers are nobody's.
+ */
 export async function createForm(
 	db: Database,
 	user: CurrentUser,
 	input: unknown,
-	state: FormState = "draft",
+	{ state = "draft", adopt = false }: { state?: FormState; adopt?: boolean } = {},
 ): Promise<{ id: string }> {
 	const definition = checked(input);
-	const taken = await db
-		.select({ id: forms.id })
-		.from(forms)
-		.where(eq(forms.id, definition.id))
-		.get();
-	if (taken) {
-		// The same words whoever has it: this must not say whether it is the asker's own.
+	const { id } = definition;
+	const [taken, answered, kept] = await db.batch([
+		db.select({ id: forms.id }).from(forms).where(eq(forms.id, id)).limit(1),
+		db.select({ id: response.id }).from(response).where(eq(response.formId, id)).limit(1),
+		db
+			.select({ id: detachedAnswer.id })
+			.from(detachedAnswer)
+			.where(eq(detachedAnswer.formId, id))
+			.limit(1),
+	]);
+	if (taken.length > 0 || (!adopt && (answered.length > 0 || kept.length > 0))) {
+		// The same words whatever holds it: this must not say whose it is, or that answers exist.
 		throw new Refused(
 			409,
-			`The id "${definition.id}" is taken. A form's id is its address, so each needs its own: change "id" in the definition.`,
+			`The id "${id}" is taken. A form's id is its address, so each needs its own: change "id" in the definition.`,
 		);
 	}
 	const hash = await hashOf(definition);
@@ -218,7 +228,7 @@ export async function addExamples(db: Database, user: CurrentUser): Promise<numb
 	let added = 0;
 	for (const example of examples()) {
 		try {
-			await createForm(db, user, example, "open");
+			await createForm(db, user, example, { state: "open", adopt: true });
 			added++;
 		} catch (error) {
 			if (!(error instanceof Refused)) throw error;

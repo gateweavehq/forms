@@ -62,9 +62,9 @@ export function notFound(): Response {
 }
 
 /**
- * Whether a request that changes something came from one of this app's own pages. A session
- * cookie is sent along with requests other sites make, so the cookie alone proves nothing
- * about who is asking; the browser's `Origin` header does.
+ * Whether a request that changes something came from one of this app's own pages. The session
+ * cookie is `SameSite=Lax`, which keeps it off the POSTs other sites start in current browsers;
+ * the `Origin` header is asked as well, so that an account's forms do not rest on that default.
  */
 function fromOwnPage(request: Request): boolean {
 	const own = env.BETTER_AUTH_URL
