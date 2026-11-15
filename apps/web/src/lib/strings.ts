@@ -5,6 +5,11 @@
 export const strings = {
 	product: "Gateweave Forms",
 	tagline: "Long surveys that people finish.",
+	/** At the end of a form's page: whose tool this is, in a few quiet words. */
+	madeWith: {
+		label: "Made with Gateweave Forms",
+		href: "https://gateweave.com",
+	},
 	home: {
 		forms: "Forms on this server",
 		none: "There are no forms here yet.",
@@ -38,19 +43,31 @@ export const strings = {
 		leg: (leg: number, legs: number) => `Part ${leg} of ${legs}`,
 		group: (group: number, groups: number, title: string) =>
 			groups > 1 ? `Group ${group} of ${groups}: ${title}` : title,
+		/** On a group's own opening card, where its title is the heading. */
+		groupOnly: (group: number, groups: number) => `Group ${group} of ${groups}`,
 		item: (item: number, items: number) => `${item} of ${items}`,
 		followUp: (item: number, items: number) =>
 			items > 1 ? `Follow-up questions, ${item} of ${items}` : "Follow-up questions",
 	},
 	section: {
-		questions: (count: number) => (count === 1 ? "1 question" : `${count} questions`),
+		/** How many questions a part asks. Some may only open after an answer, hence the range. */
+		questions: (least: number, most: number) =>
+			most === 1
+				? "1 question"
+				: least === most
+					? `${most} questions`
+					: `${least} to ${most} questions`,
 		items: (items: number, groups: number) =>
 			groups > 1
 				? `${items} items in ${groups} groups, one tap each`
 				: `${items} items, one tap each`,
+		/** A group's size, on its opening card and in the list of groups. */
+		groupItems: (items: number) => (items === 1 ? "1 item" : `${items} items`),
+		/** The author's own estimate for a part. Rough on purpose, and never counted down. */
+		minutes: (minutes: number) => (minutes <= 1 ? "About a minute" : `About ${minutes} minutes`),
 		/** Said before a repeat section, so that moving on by itself surprises nobody. */
 		movesOn:
-			"When you pick an answer, the next item comes up by itself. Back is always there, and you can change any answer.",
+			"When you pick an answer, the next item comes up by itself. Back is always there, and you can change any answer. Options, at the top, turns this off.",
 		followUpsIntro: (count: number) =>
 			count === 1
 				? "A few more questions about one of these."
@@ -61,15 +78,38 @@ export const strings = {
 		next: "Next",
 		skip: "Skip",
 		continue: "Continue",
+		/** On an opening card: the one button that starts a part or a group. */
+		begin: "Begin",
 		finish: "Finish",
 	},
 	card: {
 		more: "More about it",
 		/** The switch that turns moving on by itself off. */
 		autoAdvance: "Move on by itself after an answer",
-		keys: (count: number) => `On a keyboard, keys 1 to ${count} pick an answer.`,
-		/** Read by screen readers when the form moved on by itself. */
-		movedOn: (where: string) => `Answer saved. Next: ${where}`,
+		keys: (count: number) => `Keys 1 to ${count} pick an answer.`,
+		/**
+		 * Read by screen readers when the form moved on by itself. Where it moved to is not said
+		 * here: the new card's heading takes the focus and says it, once.
+		 */
+		movedOn: "Answer saved.",
+	},
+	/** One mark for each item of the group being answered. Never more than one group's worth. */
+	marks: {
+		label: (group: string) => `Items of ${group}`,
+		answered: (item: string) => `${item}, answered. Go back to it`,
+		passed: (item: string) => `${item}, no answer yet. Go back to it`,
+		current: (item: string) => `${item}, this one`,
+		ahead: (item: string) => `${item}, still to come`,
+	},
+	/** The look back at a group's answers, before the form moves on from it. */
+	review: {
+		title: (group: string) => `Your answers: ${group}`,
+		hint: "Have a look before going on. Pick a line to change it.",
+		none: "No answer",
+		change: (item: string, answer: string) => `${item}: ${answer}. Change`,
+	},
+	options: {
+		open: "Options",
 	},
 	input: {
 		specify: "Please specify",
@@ -137,5 +177,9 @@ export const strings = {
 		sendFailed: "This could not be sent. Check your connection and try again.",
 		sendBusy: "Many people are sending this right now. Wait a minute and press Send again.",
 		sent: "Sent. Thank you.",
+		/** The person's own answers, to look over. Closed until asked for. */
+		answersTitle: "What you answered",
+		answersNote: "Your own answers, as they were saved. Nobody else's are shown.",
+		noAnswer: "No answer",
 	},
 };

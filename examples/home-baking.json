@@ -22,6 +22,7 @@
 			"type": "questions",
 			"id": "you",
 			"title": "You and your kitchen",
+			"minutes": 1,
 			"text": ["A few questions about how you bake. None of them needs looking anything up."],
 			"questions": [
 				{
@@ -133,6 +134,7 @@
 			"type": "repeat",
 			"id": "breads",
 			"title": "Nine breads",
+			"minutes": 2,
 			"text": [
 				"Next come nine breads in three groups. For each one, pick the line that fits you best.",
 				"If you stopped making a bread, a few questions about it follow at the end of its group."

@@ -12,18 +12,18 @@ import {
 	type Section,
 	type SectionStep,
 } from "@gateweave/forms-schema";
-import {
-	type FormEvent,
-	type KeyboardEvent,
-	type ReactNode,
-	useEffect,
-	useId,
-	useRef,
-	useState,
-} from "react";
+import { type KeyboardEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { type Draft, fromDraft, isEmptyDraft, toDraft } from "#/lib/draft";
 import { strings } from "#/lib/strings";
-import { Button } from "./button";
+import {
+	CardFrame,
+	type Entering,
+	headingClass,
+	Position,
+	type PositionLine,
+	useCardFocus,
+} from "./card-frame";
+import { type GroupMark, GroupMarks } from "./group-marks";
 import { QuestionInput } from "./inputs";
 import { More, RichTextView } from "./rich-text";
 
@@ -33,140 +33,92 @@ import { More, RichTextView } from "./rich-text";
  */
 const PAUSE_MS = 350;
 
+/**
+ * How much of that pause the card stands still with its tick showing, before it starts to leave.
+ * The rest is the leaving, which therefore costs no time of its own: the answer is stored when
+ * the pause is over, by the same timer, whether anything moved or not. That keeps the time on a
+ * card, and on the one after it, the same for a person who asked for less motion.
+ */
+const HOLD_MS = 260;
+
 export type Direction = "next" | "back";
+
+/** Where a card is left for: the next one, the one before, or a card named by its key. */
+export type Move = Direction | { to: string };
 
 /** Whether the person moved, or the card moved on by itself after their answer. */
 export type Mover = "person" | "self";
 
-/**
- * Which leg, and inside a repeat section which group and item. Words only, and no percentage.
- * The card's heading is described by it, so a screen reader that lands on the heading says
- * where the card is as well as what it asks.
- */
-function Position({ id, lines }: { id: string; lines: string[] }) {
-	return (
-		<div id={id} className="flex flex-col gap-0.5 text-sm text-muted-foreground">
-			{lines.map((line) => (
-				<p key={line}>{line}</p>
-			))}
-		</div>
-	);
-}
+/** What an item is, in a line: read at arm's length on a phone, so a little larger than the rest. */
+const definitionClass = "text-[1.0625rem] leading-6 text-muted-foreground break-words";
 
-/**
- * Puts the keyboard and the screen reader at the top of a new card. Without this, focus stays
- * on a button that is gone, and a screen reader says nothing about the card having changed.
- */
-function useCardFocus() {
-	const heading = useRef<HTMLHeadingElement>(null);
-	useEffect(() => {
-		window.scrollTo(0, 0);
-		heading.current?.focus({ preventScroll: true });
-	}, []);
-	return heading;
-}
-
-function Navigation({
-	canGoBack,
-	onBack,
-	forward,
-	quiet = false,
-}: {
-	canGoBack: boolean;
-	onBack: () => void;
-	forward: string;
-	/** For "Skip": passing a question is allowed, and it should not be the loudest thing on the card. */
-	quiet?: boolean;
-}) {
-	return (
-		<div className="mt-2 flex items-center justify-between gap-3">
-			{canGoBack ? (
-				<Button variant="outline" onClick={onBack}>
-					{strings.nav.back}
-				</Button>
-			) : (
-				<span />
-			)}
-			<Button type="submit" variant={quiet ? "outline" : "primary"} className="min-w-28">
-				{forward}
-			</Button>
-		</div>
-	);
-}
-
-/** The switch that stops cards from moving on by themselves. */
-function AutoAdvanceSwitch({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
-	return (
-		<label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm text-muted-foreground">
-			<input
-				type="checkbox"
-				className="size-5 accent-foreground"
-				checked={on}
-				onChange={(event) => onChange(event.target.checked)}
-			/>
-			{strings.card.autoAdvance}
-		</label>
-	);
-}
-
-const cardClass = "card-in flex flex-col gap-5 pt-2";
-const headingClass = "text-2xl font-semibold tracking-tight text-balance break-words outline-none";
-/** A question is a sentence, not a title: a size smaller on a phone, where it would fill the screen. */
-const questionClass =
-	"text-xl font-semibold tracking-tight text-balance break-words outline-none sm:text-2xl";
-
-export interface AutoAdvance {
-	on: boolean;
-	set: (on: boolean) => void;
-}
-
-/** The start of a leg: its title, its text, and what is in it. */
+/** The start of a leg: its title, its text, what is in it and roughly how long it takes. */
 export function SectionCard({
 	step,
 	section,
+	entering,
 	canGoBack,
-	autoAdvance,
 	onLeave,
 }: {
 	step: SectionStep;
 	section: Section;
+	entering: Entering;
 	canGoBack: boolean;
-	autoAdvance: AutoAdvance;
 	onLeave: (direction: Direction) => void;
 }) {
 	const heading = useCardFocus();
 	const positionId = useId();
-	const items =
-		section.type === "repeat"
-			? section.groups.reduce((count, group) => count + group.items.length, 0)
-			: 0;
-	const submit = (event: FormEvent) => {
-		event.preventDefault();
-		onLeave("next");
-	};
+	const facts: string[] = [];
+	if (section.type === "repeat") {
+		const items = section.groups.reduce((count, group) => count + group.items.length, 0);
+		facts.push(strings.section.items(items, section.groups.length));
+	} else {
+		// Detached questions are asked at the end, apart, and are not this part's.
+		const asked = section.questions.filter((question) => !question.detached);
+		const always = asked.filter((question) => question.showIf === undefined);
+		if (asked.length > 0) facts.push(strings.section.questions(always.length, asked.length));
+	}
+	if (section.minutes !== undefined) facts.push(strings.section.minutes(section.minutes));
 	return (
-		<form className={cardClass} onSubmit={submit}>
+		<CardFrame
+			entering={entering}
+			onSubmit={() => onLeave("next")}
+			canGoBack={canGoBack}
+			onBack={() => onLeave("back")}
+			forward={strings.nav.begin}
+			resting
+		>
 			<Position id={positionId} lines={[strings.position.leg(step.leg, step.legs)]} />
-			<h1 ref={heading} tabIndex={-1} aria-describedby={positionId} className={headingClass}>
-				{section.title}
-			</h1>
+			<div className="flex flex-col gap-2">
+				<h1 ref={heading} tabIndex={-1} aria-describedby={positionId} className={headingClass}>
+					{section.title}
+				</h1>
+				{facts.map((fact, index) => (
+					<p key={fact} className={index === 0 ? "font-medium" : "text-muted-foreground"}>
+						{fact}
+					</p>
+				))}
+			</div>
 			{section.text && <RichTextView text={section.text} />}
 			{section.type === "repeat" && (
 				<>
-					<p className="text-muted-foreground">
-						{strings.section.items(items, section.groups.length)}
-					</p>
+					{section.groups.length > 1 && (
+						<ol className="flex flex-col divide-y rounded-lg border">
+							{section.groups.map((group) => (
+								<li key={group.id} className="flex items-baseline justify-between gap-3 px-3 py-2">
+									<span className="min-w-0 font-medium break-words">{group.title}</span>
+									<span className="shrink-0 text-sm text-muted-foreground">
+										{strings.section.groupItems(group.items.length)}
+									</span>
+								</li>
+							))}
+						</ol>
+					)}
 					{/* Said before the first card, so that moving on by itself is expected. */}
-					<p className="text-muted-foreground">{strings.section.movesOn}</p>
-					<AutoAdvanceSwitch on={autoAdvance.on} onChange={autoAdvance.set} />
+					<p className="text-sm text-muted-foreground">{strings.section.movesOn}</p>
 				</>
 			)}
-			<Navigation
-				canGoBack={canGoBack}
-				onBack={() => onLeave("back")}
-				forward={strings.nav.continue}
-			/>
-		</form>
+		</CardFrame>
 	);
 }
 
@@ -176,11 +128,13 @@ export function FollowUpsIntroCard({
 	section,
 	group,
 	items,
+	entering,
 	onLeave,
 }: {
 	step: FollowUpsIntroStep;
 	section: Section;
 	group: Group;
+	entering: Entering;
 	/** The items the follow-ups are about, in order. */
 	items: Item[];
 	onLeave: (direction: Direction) => void;
@@ -188,12 +142,15 @@ export function FollowUpsIntroCard({
 	const heading = useCardFocus();
 	const positionId = useId();
 	const intro = section.type === "repeat" ? section.block.followUpsIntro : undefined;
-	const submit = (event: FormEvent) => {
-		event.preventDefault();
-		onLeave("next");
-	};
 	return (
-		<form className={cardClass} onSubmit={submit}>
+		<CardFrame
+			entering={entering}
+			onSubmit={() => onLeave("next")}
+			canGoBack
+			onBack={() => onLeave("back")}
+			forward={strings.nav.continue}
+			resting
+		>
 			<Position
 				id={positionId}
 				lines={[
@@ -209,8 +166,7 @@ export function FollowUpsIntroCard({
 					<li key={item.id}>{item.label}</li>
 				))}
 			</ul>
-			<Navigation canGoBack onBack={() => onLeave("back")} forward={strings.nav.continue} />
-		</form>
+		</CardFrame>
 	);
 }
 
@@ -223,19 +179,23 @@ export interface AskingCardProps {
 	item?: Item | undefined;
 	/** The answer already stored, when the person has been here before. */
 	stored: Answer | undefined;
+	entering: Entering;
 	canGoBack: boolean;
+	/** The marks of the item's group, on an item's card. */
+	marks?: GroupMark[] | undefined;
 	/**
 	 * Whether this would be the form's last card with that answer on it (`undefined`: with the
 	 * answer already stored). An answer can close the questions after it, and the button should
 	 * say "Finish" as soon as it does.
 	 */
 	isLast: (value: AnswerValue | null | undefined) => boolean;
-	autoAdvance: AutoAdvance;
+	/** Whether an item's card moves on by itself after an answer. */
+	autoAdvance: boolean;
 	/**
 	 * Called when the card is left. `value` is the answer to store, `null` for none, and
 	 * `undefined` when what the inputs hold cannot be stored and the person is going back anyway.
 	 */
-	onLeave: (direction: Direction, value: AnswerValue | null | undefined, mover: Mover) => void;
+	onLeave: (move: Move, value: AnswerValue | null | undefined, mover: Mover) => void;
 	/** Called with the answer on the card when the tab is hidden, so that it is stored anyway. */
 	onHold: (value: AnswerValue) => void;
 }
@@ -251,7 +211,9 @@ export function AskingCard({
 	group,
 	item,
 	stored,
+	entering,
 	canGoBack,
+	marks,
 	isLast,
 	autoAdvance,
 	onLeave,
@@ -264,7 +226,21 @@ export function AskingCard({
 	const [draft, setDraft] = useState<Draft>(() => toDraft(stored?.value));
 	const [problem, setProblem] = useState<string>();
 	const pause = useRef<ReturnType<typeof setTimeout>>(undefined);
-	useEffect(() => () => clearTimeout(pause.current), []);
+	const hold = useRef<ReturnType<typeof setTimeout>>(undefined);
+	/** The card is leaving by itself: the last stretch of the pause after an answer. */
+	const [leaving, setLeaving] = useState(false);
+	const stopPause = () => {
+		clearTimeout(pause.current);
+		clearTimeout(hold.current);
+		setLeaving(false);
+	};
+	useEffect(
+		() => () => {
+			clearTimeout(pause.current);
+			clearTimeout(hold.current);
+		},
+		[],
+	);
 
 	// Closing the tab, or switching away for good, must not lose what is on the card. The
 	// listener is set once and reads the latest draft through a ref.
@@ -285,25 +261,28 @@ export function AskingCard({
 
 	const change = (next: Draft) => {
 		// An answer picked and then changed within the pause moves on with the later one.
-		clearTimeout(pause.current);
+		stopPause();
 		setDraft(next);
 		setProblem(undefined);
 	};
 
-	const leave = (direction: Direction, using: Draft, mover: Mover) => {
-		clearTimeout(pause.current);
+	const leave = (move: Move, using: Draft, mover: Mover) => {
+		stopPause();
 		const checked = fromDraft(question, using);
-		if (checked.ok) onLeave(direction, checked.value, mover);
-		else if (direction === "back") onLeave("back", undefined, mover);
+		if (checked.ok) onLeave(move, checked.value, mover);
+		// Only the way forward waits for an answer that can be stored. Going back, or to another
+		// card by its mark, leaves what is half-typed behind.
+		else if (move !== "next") onLeave(move, undefined, mover);
 		else setProblem(checked.problem);
 	};
 
 	/** A tap or a number key on a status card answers it and moves on after a short pause. */
 	const picked = (next: Draft) => {
-		if (!isStatus || !autoAdvance.on || !("options" in question)) return;
+		if (!isStatus || !autoAdvance || !("options" in question)) return;
 		// An answer that asks for a line of text needs the person to stay and type it.
 		if (question.options.find((option) => option.id === next.option)?.specify) return;
-		clearTimeout(pause.current);
+		stopPause();
+		hold.current = setTimeout(() => setLeaving(true), HOLD_MS);
 		pause.current = setTimeout(() => leave("next", next, "self"), PAUSE_MS);
 	};
 
@@ -327,18 +306,13 @@ export function AskingCard({
 		picked(next);
 	};
 
-	const submit = (event: FormEvent) => {
-		event.preventDefault();
-		leave("next", draft, "person");
-	};
-
-	const lines = [`${strings.position.leg(step.leg, step.legs)} · ${section.title}`];
+	const lines: PositionLine[] = [`${strings.position.leg(step.leg, step.legs)} · ${section.title}`];
 	if (step.kind !== "question" && group) {
 		const inGroup = strings.position.group(step.group, step.groups, group.title);
 		const within = isStatus
 			? strings.position.item(step.item, step.items)
 			: strings.position.followUp(step.item, step.items);
-		lines.push(`${inGroup} · ${within}`);
+		lines.push({ text: inGroup, tail: ` · ${within}` });
 	}
 
 	const now = fromDraft(question, draft);
@@ -356,7 +330,7 @@ export function AskingCard({
 					<h1 ref={heading} tabIndex={-1} aria-describedby={positionId} className={headingClass}>
 						{item.label}
 					</h1>
-					{item.definition && <p className="text-base text-muted-foreground">{item.definition}</p>}
+					{item.definition && <p className={definitionClass}>{item.definition}</p>}
 					{item.detail && <More text={item.detail} />}
 				</div>
 				<p id={labelId} className="text-lg font-medium text-balance break-words">
@@ -373,7 +347,7 @@ export function AskingCard({
 					id={labelId}
 					tabIndex={-1}
 					aria-describedby={positionId}
-					className={questionClass}
+					className={headingClass}
 				>
 					{label}
 				</h1>
@@ -382,44 +356,48 @@ export function AskingCard({
 	}
 
 	return (
-		<form className={cardClass} onSubmit={submit} onKeyDown={onKeyDown} noValidate>
+		<CardFrame
+			entering={entering}
+			leaving={leaving}
+			onSubmit={() => leave("next", draft, "person")}
+			onKeyDown={onKeyDown}
+			canGoBack={canGoBack}
+			onBack={() => leave("back", draft, "person")}
+			forward={forward}
+			// On a card that moves on by itself the tap is the way forward, and the button beside
+			// Back stays quiet whatever it says, so that it does not flash as the answer lands.
+			quiet={forward === strings.nav.skip || (isStatus && autoAdvance)}
+		>
 			<Position id={positionId} lines={lines} />
+			{marks && group && (
+				<GroupMarks
+					group={group.title}
+					marks={marks}
+					onOpen={(key) => leave({ to: key }, draft, "person")}
+				/>
+			)}
 			{top}
 			{question.description && (
 				<RichTextView text={question.description} className="text-muted-foreground" />
 			)}
 			{question.detail && <More text={question.detail} />}
-			<QuestionInput
-				question={question}
-				item={item}
-				draft={draft}
-				onDraft={change}
-				onPicked={picked}
-				labelledBy={labelId}
-				problemId={problem ? problemId : undefined}
-				keyHints
-			/>
-			{problem && (
-				<p id={problemId} role="alert" className="text-base font-medium text-destructive">
-					{problem}
-				</p>
-			)}
-			<Navigation
-				canGoBack={canGoBack}
-				onBack={() => leave("back", draft, "person")}
-				forward={forward}
-				quiet={forward === strings.nav.skip}
-			/>
-			{isStatus && (
-				<div className="flex flex-col border-t pt-3">
-					<AutoAdvanceSwitch on={autoAdvance.on} onChange={autoAdvance.set} />
-					{"options" in question && (
-						<p className="hidden text-sm text-muted-foreground pointer-fine:block">
-							{strings.card.keys(Math.min(question.options.length, 9))}
-						</p>
-					)}
-				</div>
-			)}
-		</form>
+			<div className="flex flex-col gap-3">
+				<QuestionInput
+					question={question}
+					item={item}
+					draft={draft}
+					onDraft={change}
+					onPicked={picked}
+					labelledBy={labelId}
+					problemId={problem ? problemId : undefined}
+					keyHints
+				/>
+				{problem && (
+					<p id={problemId} role="alert" className="text-base font-medium text-destructive">
+						{problem}
+					</p>
+				)}
+			</div>
+		</CardFrame>
 	);
 }

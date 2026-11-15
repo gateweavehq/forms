@@ -1,0 +1,129 @@
+{
+	"version": 1,
+	"id": "windowsill-herbs",
+	"title": "Herbs on the windowsill",
+	"sections": [
+		{
+			"type": "repeat",
+			"id": "herbs",
+			"title": "Eleven herbs",
+			"minutes": 2,
+			"text": [
+				"A made-up form with a long group: eight herbs in the first group, three in the second, and two questions about each."
+			],
+			"groups": [
+				{
+					"id": "soft",
+					"title": "Soft herbs",
+					"items": [
+						{
+							"id": "basil",
+							"label": "Basil",
+							"name": "basil",
+							"definition": "Tender leaves that bruise easily and want warmth and a lot of light."
+						},
+						{
+							"id": "parsley",
+							"label": "Parsley",
+							"name": "parsley",
+							"definition": "Flat or curly, slow to sprout and then hard to stop."
+						},
+						{
+							"id": "coriander",
+							"label": "Coriander",
+							"name": "coriander",
+							"definition": "Grown for its leaves first; it runs to seed as soon as it is warm."
+						},
+						{
+							"id": "mint",
+							"label": "Mint",
+							"name": "mint",
+							"definition": "Spreads by runners, so it is usually given a pot of its own."
+						},
+						{
+							"id": "chives",
+							"label": "Chives",
+							"name": "chives",
+							"definition": "Thin hollow leaves that grow back after every cut."
+						},
+						{
+							"id": "dill",
+							"label": "Dill",
+							"name": "dill",
+							"definition": "Feathery and tall, with a long root that dislikes being moved."
+						},
+						{
+							"id": "tarragon",
+							"label": "Tarragon",
+							"name": "tarragon",
+							"definition": "Narrow leaves with a taste of aniseed; it dies back in winter."
+						},
+						{
+							"id": "chervil",
+							"label": "Chervil",
+							"name": "chervil",
+							"definition": "A delicate cousin of parsley that prefers shade."
+						}
+					]
+				},
+				{
+					"id": "woody",
+					"title": "Woody herbs",
+					"items": [
+						{
+							"id": "rosemary",
+							"label": "Rosemary",
+							"name": "rosemary",
+							"definition": "An evergreen shrub with needles, happy to be dry."
+						},
+						{
+							"id": "thyme",
+							"label": "Thyme",
+							"name": "thyme",
+							"definition": "Low and wiry, with tiny leaves and a liking for poor soil."
+						},
+						{
+							"id": "sage",
+							"label": "Sage",
+							"name": "sage",
+							"definition": "Soft grey leaves on a woody stem that needs cutting back each spring."
+						}
+					]
+				}
+			],
+			"block": {
+				"status": [
+					{
+						"id": "grown",
+						"type": "single_choice",
+						"label": "Have you grown {{item.name}} indoors?",
+						"options": [
+							{ "id": "never", "label": "Never" },
+							{ "id": "stopped", "label": "I did, and gave up" },
+							{ "id": "now", "label": "It is growing now" }
+						]
+					},
+					{
+						"id": "cooked",
+						"type": "single_choice",
+						"label": "Do you cook with {{item.name}}?",
+						"options": [
+							{ "id": "often", "label": "Often" },
+							{ "id": "sometimes", "label": "Now and then" },
+							{ "id": "no", "label": "No" }
+						]
+					}
+				],
+				"followUps": [
+					{
+						"id": "gave-up-why",
+						"type": "short_text",
+						"label": "What happened to your {{item.name}}?",
+						"showIf": { "question": "grown", "is": "stopped" }
+					}
+				],
+				"followUpsIntro": "You gave up on {{count}} of these. One question about each."
+			}
+		}
+	]
+}

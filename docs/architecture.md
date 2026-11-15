@@ -11,8 +11,8 @@ validation, the importer's output.
 
 ```
 form     { version, id, title, consent?, sections[], end? }
-section  { type: "questions", id, title, text?, questions[] }
-       | { type: "repeat", id, title, text?, groups[], block }
+section  { type: "questions", id, title, text?, minutes?, questions[] }
+       | { type: "repeat", id, title, text?, minutes?, groups[], block }
 group    { id, title, items[] }
 item     { id, label, name?, definition?, detail? }
 block    { status[], followUps[], followUpsIntro? }
@@ -204,6 +204,52 @@ The research is summarised in the plan (FRM-1 on the board); the design rules it
 | Ranking by picking in order, never by dragging            | WCAG 2.5.7 (Dragging Movements)                                                              |
 | Controls at least 44 pixels, nothing wider than 320       | WCAG 2.5.5 (Target Size), 1.4.10 (Reflow)                                                    |
 | No timers, no points, no swiping                          | Game mechanics lowered completion in both adult experiments                                  |
+| A look back at each group's answers before moving on      | Reasoning, not a finding: see below                                                          |
+| Marks for one group's items, and nothing wider            | Reasoning, not a finding: see below                                                          |
+
+Two of these rest on reasoning from what was measured, not on a study of the thing itself:
+
+- **The look back.** What was measured is the cost it answers: with automatic forwarding people
+  changed about half as many answers (Giroux et al. 2019, 20,574 respondents), and fewer in
+  Selkälä & Couper 2018; a third of those who disliked it said changing an answer was hard.
+  The research file reads this as the one risk of moving on by itself. That a list of a
+  group's answers, each one press from its card, brings corrections back is our inference. No
+  study of such a review step was found. The record of changes per answer is what would show
+  whether it works.
+- **The marks.** What was measured is the bar: a constant progress indicator does not reduce
+  quitting across 32 experiments (Villar, Callegaro & Yang 2013), and one that looks slow early
+  raised it from 13% to 22%. No study was found of marks that cover one group and never the
+  form. That a handful which fills within a minute does not crawl is reasoning; if quitting
+  inside long groups turns out higher with them, they should go.
+
+`minutes` on a section is its author's estimate, shown on the opening card as "About 3 minutes".
+Stating a length lowers starts a little (62% to 75% started across 10, 20 and 30 minutes in one
+experiment), so it is the author's choice to give one, and nothing counts it down.
+
+### What happens when an item's card is answered
+
+The chosen answer fills with the accent and shows a tick from the input's own `:checked` state,
+so nothing waits on a script. The card then stands still for 260 ms, leaves in 90 ms, and the
+answer is stored and the next card shown 350 ms after the tap (`PAUSE_MS` and `HOLD_MS` in
+`components/cards.tsx`; the keyframes in `styles.css`). The next card arrives in 110 ms.
+
+The leaving happens inside the pause, and the pause is two timers that do not know whether
+anything moved. A person who asked for less motion sees no slide and waits exactly as long. So
+the active time stored for an answer means the same for both: from the card being put up to the
+answer being stored, pause included, and the next card's time starts when it is put up. Back and
+the buttons move at once.
+
+The look back and the opening of a group are cards of the page, not steps of the flow
+(`lib/deck.ts`). They ask nothing, and a response's stored position is always a step: on one of
+these cards it is the step beside it.
+
+The marks of a group of up to six items are buttons, 44 pixels square each. A longer group's
+marks are a picture only, for every pointer: not buttons, not focusable, and hidden from screen
+readers, which have the place in words. Back and the look back do the going back. A mark that
+waits for its answer is drawn in the colour of quiet text, for 3 to 1 against the card.
+
+On a phone, a card with something to press inside it lies on the bar; an opening or an
+introduction, with nothing to press, stands in the middle of the space above the bar.
 
 ### Security
 

@@ -4,7 +4,7 @@ import {
 	detachedQuestions,
 	detachedQuestionsShown,
 } from "@gateweave/forms-schema";
-import { type FormEvent, useEffect, useId, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { RequestFailed, sendDetached } from "#/lib/client";
 import { type Draft, fromDraft, toDraft } from "#/lib/draft";
 import { strings } from "#/lib/strings";
@@ -23,10 +23,13 @@ import { RichTextView } from "./rich-text";
 export function EndPage({
 	definition,
 	askDetached,
+	children,
 }: {
 	definition: Definition;
 	/** Whether the person finished just now, in this page. */
 	askDetached: boolean;
+	/** What follows the thanks and the detached questions: the person's own answers to look over. */
+	children?: ReactNode;
 }) {
 	const heading = useRef<HTMLHeadingElement>(null);
 	useEffect(() => {
@@ -49,6 +52,7 @@ export function EndPage({
 				<p>{strings.end.body}</p>
 			)}
 			{hasDetached && <DetachedForm definition={definition} />}
+			{children}
 		</main>
 	);
 }
