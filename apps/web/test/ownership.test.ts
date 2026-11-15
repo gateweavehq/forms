@@ -132,3 +132,84 @@ describe("the addresses that name no form", () => {
 		},
 	);
 });
+
+describe("a change without the app's own Origin", () => {
+	// A browser sends Origin with every request that is not a plain read. One that carries the
+	// owner's cookie and no Origin did not come from one of the app's pages.
+	it.each([
+		["POST", "forms/FORM/state", { state: "closed" }],
+		["POST", "forms/FORM/definition", { definition: plantForm(FORM, "Taken over") }],
+		["DELETE", "forms/FORM/responses/RESPONSE", undefined],
+		["DELETE", "forms/FORM/responses", undefined],
+		["POST", "forms", { definition: plantForm("no-origin") }],
+	] as const)("%s /api/owner/%s is not found, and changes nothing", async (method, path, body) => {
+		const response = await forms.fetch(
+			`/api/owner/${path.replace("FORM", FORM).replace("RESPONSE", responseId)}`,
+			{
+				method,
+				headers: { Cookie: owner, ...(body ? { "Content-Type": "application/json" } : {}) },
+				...(body ? { body: JSON.stringify(body) } : {}),
+			},
+		);
+		expect(response.status).toBe(404);
+		const form = await forms.db.prepare("SELECT * FROM form WHERE id = ?").bind(FORM).first();
+		expect(form).toMatchObject({ title: "Plants at home", state: "open" });
+		const kept = await forms.db
+			.prepare("SELECT count(*) AS n FROM response WHERE form_id = ?")
+			.bind(FORM)
+			.first<{ n: number }>();
+		expect(kept?.n).toBe(1);
+		expect(await forms.db.prepare("SELECT id FROM form WHERE id = 'no-origin'").first()).toBeNull();
+	});
+});
+
+describe("what is another account's, asked for through a form of one's own", () => {
+	const OTHER = "strangers-plants";
+	let version: string;
+
+	beforeAll(async () => {
+		const created = await forms.fetch(
+			"/api/owner/forms",
+			as(stranger, { method: "POST", body: JSON.stringify({ definition: plantForm(OTHER) }) }),
+		);
+		expect(created.status).toBe(201);
+		const row = await forms.db
+			.prepare("SELECT definition_hash AS hash FROM form WHERE id = ?")
+			.bind(FORM)
+			.first<{ hash: string }>();
+		version = row?.hash ?? "";
+	});
+
+	it("is not found: a response belongs to its form", async () => {
+		const page = await forms.fetch(`/forms/${OTHER}/responses/${responseId}`, as(stranger));
+		expect(page.status).toBe(404);
+		const removed = await forms.fetch(
+			`/api/owner/forms/${OTHER}/responses/${responseId}`,
+			as(stranger, { method: "DELETE" }),
+		);
+		expect(removed.status).toBe(404);
+		const kept = await forms.db
+			.prepare("SELECT count(*) AS n FROM response WHERE id = ?")
+			.bind(responseId)
+			.first<{ n: number }>();
+		expect(kept?.n).toBe(1);
+	});
+
+	it("gives one's own form and nothing else: a version belongs to its form", async () => {
+		// The owner's form has one response under this version. Asked for through the
+		// stranger's form, the version is not one that form ever had, so its own is shown.
+		const page = await forms.fetch(`/forms/${OTHER}?v=${version}`, as(stranger));
+		expect(page.status).toBe(200);
+		expect(await page.text()).toContain("Counting all 0 responses to this version.");
+		const file = await forms.fetch(
+			`/api/owner/forms/${OTHER}/export/responses.csv?v=${version}`,
+			as(stranger),
+		);
+		expect(file.status).toBe(200);
+		const text = await file.text();
+		expect(text.split("\r\n").filter(Boolean)).toHaveLength(1);
+		expect(text).not.toContain(responseId);
+		const list = await forms.fetch(`/forms/${OTHER}/responses?v=${version}`, as(stranger));
+		expect(await list.text()).not.toContain(responseId);
+	});
+});

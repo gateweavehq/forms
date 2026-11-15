@@ -197,3 +197,64 @@ test("shows a form's results to nobody but its owner", async ({ page, browser },
 	}
 	await expect(other.getByText("Plants at home")).toHaveCount(0);
 });
+
+test("answers the pages' own server functions to nobody but the owner", async ({
+	page,
+	browser,
+}, info) => {
+	const id = freshId(info);
+	await signUp(page);
+	await bringIn(page, id);
+	await page.getByRole("button", { name: "Open it for answers" }).click();
+	await expect(page.getByText("This form is open.")).toBeVisible();
+	await respond(browser, id, "A lot", { finish: true });
+
+	// What the pages load, they load from addresses of their own. Each one the owner's
+	// browser asks while going through the tabs is kept, to be asked again by others.
+	const asked = new Map<string, Record<string, string>>();
+	page.on("request", (request) => {
+		if (request.method() !== "GET" || !request.url().includes("/_serverFn/")) return;
+		const { cookie: _cookie, ...headers } = request.headers();
+		asked.set(request.url(), headers);
+	});
+	await page.goto("/forms");
+	await page.getByRole("link", { name: /Plants at home/ }).click();
+	await expect(page.getByTestId("started")).toHaveText("1");
+	for (const name of ["Items", "Questions", "Responses"]) {
+		await tab(page, name).click();
+		await expect(page.getByTestId("counted")).toBeVisible();
+	}
+	await page.locator("[data-response]").first().click();
+	await expect(page.getByRole("button", { name: "Delete this response" })).toBeVisible();
+	await tab(page, "Kept apart").click();
+	await expect(page.getByRole("status")).toBeVisible();
+	await tab(page, "Settings").click();
+	await expect(page.getByText("This form is open.")).toBeVisible();
+
+	const mine = [...asked].filter(([url]) => decodeURIComponent(url).includes(id));
+	// The form itself, four views of its results, one response, and what is kept apart.
+	expect(mine.length).toBeGreaterThanOrEqual(7);
+
+	const other = await browser.newContext();
+	await signUp(await other.newPage());
+	const nobody = await browser.newContext();
+	for (const [url, headers] of mine) {
+		const own = await page.request.get(url, { headers });
+		expect(own.status()).toBe(200);
+		const ownText = await own.text();
+
+		// The same question about a form that does not exist, as the measure.
+		const missing = await page.request.get(url.replaceAll(id, "no-such-form"), { headers });
+		const expected = await missing.text();
+		expect(expected).not.toBe(ownText);
+
+		for (const context of [other, nobody]) {
+			const response = await context.request.get(url, { headers });
+			expect(response.status()).toBe(missing.status());
+			const text = await response.text();
+			expect(text).toBe(expected);
+			expect(text).not.toContain("Plants at home");
+			expect(text).not.toContain("A lot");
+		}
+	}
+});
