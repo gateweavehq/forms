@@ -23,12 +23,17 @@ function Dot({ mark }: { mark: GroupMark }) {
 	return (
 		<span
 			data-mark={mark.answered ? "answered" : "open"}
+			data-current={mark.current || undefined}
 			aria-hidden="true"
 			className={cn(
 				"block size-3.5 rounded-full border-2",
-				mark.answered ? "border-brand bg-brand" : "border-muted-foreground",
+				// One border colour each, never two classes for the cascade to choose between.
+				mark.answered
+					? "border-brand bg-brand"
+					: mark.current
+						? "border-brand"
+						: "border-muted-foreground",
 				mark.current && "outline-2 outline-offset-2 outline-brand/40",
-				mark.current && !mark.answered && "border-brand",
 			)}
 		/>
 	);

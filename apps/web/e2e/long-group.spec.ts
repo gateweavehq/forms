@@ -188,8 +188,8 @@ for (const colorScheme of ["light", "dark"] as const) {
 		await answer(page, "Often");
 		await expect(heading(page, "Parsley")).toBeVisible();
 		// The marks still to come, the one on the card, and the one that has its answer.
-		const open = await contrastOf(page, "[data-mark=open]:not(.border-brand)");
-		const current = await contrastOf(page, "[data-mark=open].border-brand");
+		const open = await contrastOf(page, "[data-mark=open]:not([data-current])");
+		const current = await contrastOf(page, "[data-mark=open][data-current]");
 		const answered = await contrastOf(page, "[data-mark=answered]");
 		console.log(
 			`marks against the card, ${colorScheme}: waiting ${open.toFixed(2)}:1, current ${current.toFixed(2)}:1, answered ${answered.toFixed(2)}:1`,
