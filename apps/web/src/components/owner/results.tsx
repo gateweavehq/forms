@@ -1,5 +1,5 @@
 import type { QuestionSummary } from "@gateweave/forms-results";
-import { getRouteApi, useNavigate } from "@tanstack/react-router";
+import { getRouteApi, useHydrated, useNavigate } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { duration, percent, rounded } from "#/lib/format";
 import type { ResultsFrame, ResultsSearch } from "#/lib/results";
@@ -61,6 +61,9 @@ export function Counted({
 	const change = (next: Partial<ResultsSearch>) =>
 		void navigate({ search: (previous) => ({ ...previous, ...next }), replace: true });
 	const filtered = search.device !== undefined || search.q !== undefined;
+	// A filter works only through the page's script. Chosen before the script has run, it
+	// would show as chosen and count nothing, so the lists wait for it, as the buttons do.
+	const hydrated = useHydrated();
 
 	return (
 		<section className="flex flex-col gap-3 rounded-xl border p-4">
@@ -70,6 +73,7 @@ export function Counted({
 						{t.version}
 						<select
 							className={select}
+							disabled={!hydrated}
 							value={frame.version}
 							// Another version has other questions, so a filter on one does not carry over.
 							onChange={(event) => change({ v: event.target.value, q: undefined, o: undefined })}
@@ -86,6 +90,7 @@ export function Counted({
 					{t.device}
 					<select
 						className={select}
+						disabled={!hydrated}
 						value={search.device ?? ""}
 						onChange={(event) => {
 							const device = event.target.value;
@@ -108,6 +113,7 @@ export function Counted({
 						{t.answer}
 						<select
 							className={select}
+							disabled={!hydrated}
 							value={search.q && search.o ? `${search.q} ${search.o}` : ""}
 							onChange={(event) => {
 								// Ids hold no space, so one separates the question from the option.
