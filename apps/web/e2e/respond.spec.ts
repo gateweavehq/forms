@@ -543,6 +543,31 @@ test("can be completed with a keyboard alone", async ({ page, isMobile }) => {
 	});
 });
 
+test("does not take an arrow key for a tap after a press that was let go elsewhere", async ({
+	page,
+	isMobile,
+}) => {
+	test.skip(isMobile, "A phone has no arrow keys");
+	await start(page);
+	await skipTo(page, "Nine breads");
+	await forward(page);
+	// The mouse goes down on an answer, is dragged off it and let go: no answer is chosen.
+	const box = await page.locator("label").filter({ hasText: "Make it most weeks" }).boundingBox();
+	if (!box) throw new Error("The answer is not on the page");
+	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(box.x + box.width / 2, 20, { steps: 4 });
+	await page.mouse.up();
+	await expect(page.getByRole("radio", { name: "Make it most weeks" })).not.toBeChecked();
+
+	// Then the keyboard: arrows move through the answers, and the card stays.
+	await page.getByRole("radio", { name: "Never made it" }).focus();
+	await page.keyboard.press("ArrowDown");
+	await expect(page.getByRole("radio", { name: "Made it once or twice" })).toBeChecked();
+	await page.waitForTimeout(900);
+	await expect(heading(page, "Sandwich loaf")).toBeVisible();
+});
+
 test("never shows a percentage or a progress bar", async ({ page }) => {
 	await open(page);
 	await expectNoProgressDisplay(page);

@@ -108,6 +108,12 @@ function RadioList({
 			aria-labelledby={labelledBy}
 			aria-describedby={problemId}
 			className="flex flex-col gap-2"
+			// A press that began on an answer and was let go elsewhere changes nothing, and
+			// leaves the mark that a pointer was at work. The next change by keyboard would then
+			// pass for a tap and move the card on. A key pressed here means the keyboard is in use.
+			onKeyDown={() => {
+				viaPointer.current = false;
+			}}
 		>
 			{question.options.map((option, index) => {
 				const label = item ? mergeItem(option.label, item) : option.label;
