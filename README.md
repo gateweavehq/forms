@@ -46,7 +46,10 @@ answered while it belonged to nobody cannot be added, like any id with answers u
 1. **Bring it in** at `/forms/new`: paste or upload a definition, or the page of a form you have
    on Tally. You see what it becomes before anything is stored: its outline, and for a Tally form
    everything the importer folded, changed or would not fold.
-2. **Open it.** A form starts as a draft, and its link (`/f/<id>`) says it is not open yet.
+2. **Say who runs it, and open it.** A form starts as a draft, and its link (`/f/<id>`) says
+   it is not open yet. It cannot be opened until it names who runs the study and how to reach
+   them: `controller` in the definition, or the two fields on its Settings page. The first page
+   shows that to everyone who answers, with a link to a page that lists what is stored.
    Closing it later stops new responses; people who had begun can still finish.
 3. **Read the results** at `/forms/<id>`: how many started and completed, median active time by
    device, where the unfinished ones stopped, every question added up, each repeated section as a
@@ -57,7 +60,11 @@ answered while it belonged to nobody cannot be added, like any id with answers u
    database as it was for up to 30 days.)
 5. **Close it** to read what it kept apart, such as addresses for the results: those are shown
    and exported only once the form is closed and holds at least five, in an order drawn anew
-   each time, so that watching them arrive cannot say whose each is.
+   each time, so that watching them arrive cannot say whose each is. Closing also ends people
+   taking back answers they had finished.
+6. **Delete it** when the study is over, under Settings: the form, its responses, what it kept
+   apart and every version go in one step, after you have typed its id. An account can be
+   deleted once it has no forms.
 
 The CSV files are UTF-8 and begin with a byte-order mark, so that a spreadsheet opened by
 double-click reads them right. In R, `readr::read_csv("responses.csv")` skips the mark; with
@@ -74,6 +81,14 @@ Someone answering needs no account, and can do three things about their own answ
 forget the way back, and open the consent text on a page of its own to print or keep. An
 answer they take back by changing an earlier one (a reason for stopping, under something they
 then say they never did) is deleted at once, not kept until they finish.
+
+After finishing, they can still take everything back from the address of their answers, on any
+device, for as long as the form is open: the end page has "Take my answers back", behind a
+confirmation. Closing the form ends that, and from then on the page names who runs the study
+as the one to ask. A form can instead end it at finishing, with `"withdrawal":
+"until-complete"` in its definition. Either way the first page says which applies. You see how
+many people took their answers back, per version, and never which or when. What a form kept
+apart is not removed with a response, because nothing connects the two; the pages say so.
 
 ## Import a form from Tally
 
@@ -103,14 +118,14 @@ as stored apart. Only import forms you have the right to use.
 
 ## Repository
 
-| Path                    | What lives there                                                |
-| ----------------------- | --------------------------------------------------------------- |
-| `packages/schema`       | The form definition, its rules, the answers' shape and the flow |
-| `packages/tally-import` | Tally page data into a definition                               |
-| `packages/results`      | A form's results worked out from its responses, and the exports |
-| `apps/web`              | The Worker: respondent's and owner's pages, the APIs, D1        |
-| `examples/`             | Made-up forms, served in development and in tests               |
-| `docs/`                 | [Architecture](docs/architecture.md)                            |
+| Path                    | What lives there                                                                                           |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `packages/schema`       | The form definition, its rules, the answers' shape and the flow                                            |
+| `packages/tally-import` | Tally page data into a definition                                                                          |
+| `packages/results`      | A form's results worked out from its responses, and the exports                                            |
+| `apps/web`              | The Worker: respondent's and owner's pages, the APIs, D1                                                   |
+| `examples/`             | Made-up forms, served in development and in tests                                                          |
+| `docs/`                 | [Architecture](docs/architecture.md), [self-hosting](docs/self-hosting.md), [what is stored](docs/data.md) |
 
 Guidance for contributors and coding agents is in [AGENTS.md](AGENTS.md).
 
@@ -137,6 +152,12 @@ No email is sent yet, so no address can be verified. That shapes the list:
 Deploy with `pnpm --filter @gateweave/forms-web deploy:staging` (or a script like it), not with
 `wrangler deploy` on a build of your own: the script checks that the build does not serve the
 example forms, which a build made for the browser tests does.
+
+[docs/self-hosting.md](docs/self-hosting.md) has the order of a deploy and the rate-limiting
+rules to set at Cloudflare's edge, which the app relies on and cannot set itself.
+[docs/data.md](docs/data.md) says what a deployment stores, for how long, and what deleting
+does: the database keeps up to 30 days of its own history, from which deleted rows can be
+restored.
 
 ## Licence
 

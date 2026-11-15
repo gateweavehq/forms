@@ -22,7 +22,8 @@ storage or anything a respondent sees.
 | `packages/results`      | Results from responses: counts, medians, signals, filters, CSV. Pure        |
 | `apps/web`              | The Worker: TanStack Start pages, Better Auth, the APIs, D1 through Drizzle |
 | `examples/`             | Made-up forms, served at `/f/<id>` only where `FORMS_EXAMPLES` is `"1"`     |
-| `docs/`                 | Architecture                                                                |
+| `docs/`                 | Architecture, self-hosting, and what a deployment stores (`data.md`)        |
+| `.github/workflows/`    | CI: `check` (`pnpm verify`) and `e2e` (the browser tests)                   |
 | `wrangler.jsonc`        | The Worker's config, at the root as in the sibling repositories             |
 
 ## Commands
@@ -122,6 +123,22 @@ silently.
     can outlive their form, and whoever took the id would be shown them. And a build that
     serves the examples is never deployed: every script that deploys runs
     `scripts/check-deploy.mjs` between building and deploying.
+18. **Taking answers back is the server's decision, and leaves a number.** A finished response
+    can be withdrawn with its secret while its form is open and the definition it began under
+    says `until-closed`; the statements that delete ask again (`withdrawResponse`). A closed
+    form, a wrong secret and a missing response get the same 404, byte for byte. What is kept
+    is `definition.withdrawn`, a count: never add a time, an id or a flag that would say which
+    response or when. What a form keeps apart cannot be found from a response and stays, and
+    every page that withdraws says so.
+19. **A respondent is told who is asking and what is kept.** A form cannot be opened without a
+    `controller` (`notOpenable`, `server/owner.ts`), and its first page shows it with a link to
+    `/f/<form>/stored`. That page is built from the schema (`server/stored.ts`): a new column
+    in `response`, `answer` or `detached_answer` gets a line in `strings.stored.columns`, and
+    `test/stored.test.ts` fails until it has one. Examples and fixtures name a made-up
+    controller.
+20. **Deleting a form deletes everything under its id, in one batch**, and an account is
+    deleted only when it owns no form. Both are the owner's alone, asked for with what the
+    person typed, and "not found" for anyone else like every other owner address.
 
 ## Code style
 
@@ -156,6 +173,9 @@ silently.
   `pnpm --filter @gateweave/forms-web exec playwright install chromium`. They are not part of
   `pnpm verify`. Every test starts its own response. To run them in two checkouts at once, give
   each its own port with `FORMS_E2E_PORT` (4772 to 4779).
+- CI (`.github/workflows/ci.yml`) runs `pnpm verify` as the `check` job and the browser tests as
+  the `e2e` job, on pull requests and on pushes to `main`. A change to docs alone runs only the
+  lint.
 - On Windows, keep the checkout in a short path. The local D1 database is a file deep under
   `apps/web/.wrangler`, and once its full path passes 260 characters Wrangler's migration fails
   with nothing but "internal error".
