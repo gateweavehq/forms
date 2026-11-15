@@ -1,0 +1,8 @@
+{
+	"extends": "../../../tsconfig.base.json",
+	"compilerOptions": {
+		// The tests run in Node and read the example form from the repository.
+		"types": ["node"]
+	},
+	"include": ["*.ts", "../src"]
+}

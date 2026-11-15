@@ -1,0 +1,327 @@
+{
+	"version": 1,
+	"id": "home-baking",
+	"title": "Bread at home",
+	"consent": {
+		"title": "Before you start",
+		"text": [
+			"This is a made-up survey about baking bread at home. It shows what Gateweave Forms does, and nobody studies the answers.",
+			"It has three parts and takes about three minutes. The middle part asks about nine breads, one tap each.",
+			[
+				{ "text": "Your answers are saved as you give them", "bold": true },
+				{
+					"text": ", so you can stop and pick up later, on this device or another. Every question can be passed without an answer."
+				}
+			],
+			"No name, no network address and nothing about your device beyond its rough size is stored. An email address, if you choose to leave one at the end, is kept apart from your answers and cannot be linked to them."
+		],
+		"statement": "I have read this and agree to take part."
+	},
+	"sections": [
+		{
+			"type": "questions",
+			"id": "you",
+			"title": "You and your kitchen",
+			"text": ["A few questions about how you bake. None of them needs looking anything up."],
+			"questions": [
+				{
+					"id": "often",
+					"type": "single_choice",
+					"label": "How often do you bake bread?",
+					"options": [
+						{ "id": "weekly", "label": "Most weeks" },
+						{ "id": "monthly", "label": "About once a month" },
+						{ "id": "rarely", "label": "A few times a year" },
+						{ "id": "not-now", "label": "Not at the moment" }
+					]
+				},
+				{
+					"id": "years",
+					"type": "number",
+					"label": "For how many years have you baked bread at home?",
+					"description": [
+						"A rough number is fine. Use a decimal for less than a year, such as 0.5."
+					],
+					"min": 0,
+					"max": 90,
+					"placeholder": "Years"
+				},
+				{
+					"id": "reasons",
+					"type": "multiple_choice",
+					"label": "What do you bake for, mostly? Choose up to two.",
+					"max": 2,
+					"options": [
+						{ "id": "taste", "label": "It tastes better" },
+						{ "id": "cost", "label": "It costs less" },
+						{ "id": "craft", "label": "I enjoy the work" },
+						{ "id": "sharing", "label": "To share with family and friends" },
+						{ "id": "other", "label": "Something else", "specify": true }
+					]
+				},
+				{
+					"id": "oven",
+					"type": "dropdown",
+					"label": "What do you bake in most often?",
+					"options": [
+						{ "id": "fan", "label": "Electric oven with a fan" },
+						{ "id": "electric", "label": "Electric oven without a fan" },
+						{ "id": "gas", "label": "Gas oven" },
+						{ "id": "wood", "label": "Wood-fired oven" },
+						{ "id": "machine", "label": "Bread machine" },
+						{ "id": "pan", "label": "A pan on the stove" }
+					]
+				},
+				{
+					"id": "starter",
+					"type": "single_choice",
+					"label": "Do you keep a sourdough starter?",
+					"options": [
+						{ "id": "yes", "label": "Yes" },
+						{ "id": "used-to", "label": "I used to" },
+						{ "id": "no", "label": "No" }
+					]
+				},
+				{
+					"id": "starter-age",
+					"type": "number",
+					"label": "How old is your starter, in years?",
+					"min": 0,
+					"max": 200,
+					"placeholder": "Years",
+					"showIf": { "question": "starter", "is": "yes" }
+				},
+				{
+					"id": "tools",
+					"type": "grid",
+					"label": "How often do you use each of these?",
+					"rows": [
+						{ "id": "scale", "label": "Kitchen scale" },
+						{ "id": "thermometer", "label": "Thermometer" },
+						{ "id": "pot", "label": "Cast-iron pot with a lid" }
+					],
+					"columns": [
+						{ "id": "never", "label": "Never" },
+						{ "id": "sometimes", "label": "Sometimes" },
+						{ "id": "always", "label": "Every bake" }
+					]
+				},
+				{
+					"id": "flours",
+					"type": "fields",
+					"label": "Which flours are in your kitchen right now?",
+					"fields": [
+						{ "id": "wheat", "label": "Wheat", "placeholder": "For example, strong white" },
+						{ "id": "rye", "label": "Rye", "placeholder": "For example, wholemeal rye" },
+						{ "id": "other", "label": "Anything else" }
+					]
+				},
+				{
+					"id": "priorities",
+					"type": "ranking",
+					"label": "What matters most to you in a loaf? Put these in order, most important first.",
+					"options": [
+						{ "id": "crust", "label": "The crust" },
+						{ "id": "crumb", "label": "The crumb" },
+						{ "id": "flavour", "label": "The flavour" },
+						{ "id": "keeping", "label": "How long it keeps" }
+					]
+				}
+			]
+		},
+		{
+			"type": "repeat",
+			"id": "breads",
+			"title": "Nine breads",
+			"text": [
+				"Next come nine breads in three groups. For each one, pick the line that fits you best.",
+				"If you stopped making a bread, a few questions about it follow at the end of its group."
+			],
+			"groups": [
+				{
+					"id": "loaves",
+					"title": "Loaves",
+					"items": [
+						{
+							"id": "sandwich-loaf",
+							"label": "Sandwich loaf",
+							"definition": "A soft, even loaf baked in a tin, made for slicing.",
+							"detail": [
+								"The dough usually holds a little fat and sugar, which keep the crumb soft for days. It rises twice, the second time in the tin, and bakes at a moderate heat so the crust stays thin."
+							]
+						},
+						{
+							"id": "sourdough-loaf",
+							"label": "Sourdough loaf",
+							"definition": "A crusty loaf raised with a starter instead of baker's yeast.",
+							"detail": [
+								"A starter is flour and water kept alive from bake to bake. It raises the dough slowly, over many hours, which gives the loaf its sour edge and open crumb.",
+								[
+									{ "text": "It counts as sourdough here", "bold": true },
+									{ "text": " even when a pinch of yeast goes in beside the starter." }
+								]
+							]
+						},
+						{
+							"id": "rye-bread",
+							"label": "Rye bread",
+							"definition": "A dense, dark loaf made mostly from rye flour.",
+							"detail": [
+								"Rye has little of the gluten that lets wheat dough stretch, so the loaf rises less and is often baked in a tin. Most recipes sour the dough, which rye needs to set properly."
+							]
+						},
+						{
+							"id": "brioche",
+							"label": "Brioche",
+							"definition": "A rich loaf with butter and eggs worked into the dough.",
+							"detail": [
+								"The butter is added a piece at a time once the dough has come together, and the dough is chilled before shaping so that it can be handled at all."
+							]
+						}
+					]
+				},
+				{
+					"id": "flatbreads",
+					"title": "Flatbreads",
+					"items": [
+						{
+							"id": "pita",
+							"label": "Pita",
+							"definition": "A round flatbread that puffs into a pocket in a very hot oven.",
+							"detail": [
+								"The pocket forms when the water in the dough turns to steam faster than the crust can set, which takes an oven or a stone at its highest heat."
+							]
+						},
+						{
+							"id": "naan",
+							"label": "Naan",
+							"definition": "A soft, leavened flatbread, by tradition baked on the wall of a clay oven.",
+							"detail": [
+								"At home it is cooked in a very hot pan or under a grill. Yoghurt in the dough keeps it tender."
+							]
+						},
+						{
+							"id": "flour-tortillas",
+							"label": "Flour tortillas",
+							"definition": "Thin rounds without yeast, cooked in a dry pan.",
+							"detail": [
+								"The dough is flour, fat, salt and warm water, rested and then rolled as thin as it will go. Each one cooks in under a minute."
+							]
+						}
+					]
+				},
+				{
+					"id": "small-bakes",
+					"title": "Small bakes",
+					"items": [
+						{
+							"id": "bagels",
+							"label": "Bagels",
+							"definition": "Rings of dough boiled briefly, then baked.",
+							"detail": [
+								"The boil sets the outside before the oven does, which is where the chew and the shine come from."
+							]
+						},
+						{
+							"id": "soft-pretzels",
+							"label": "Soft pretzels",
+							"definition": "Knots of dough dipped in an alkaline bath before baking.",
+							"detail": [
+								"The bath, lye in a bakery and baking soda at home, is what turns the crust deep brown and gives it its taste."
+							]
+						}
+					]
+				}
+			],
+			"block": {
+				"status": [
+					{
+						"id": "made",
+						"type": "single_choice",
+						"label": "Have you made {{item.label}}?",
+						"options": [
+							{ "id": "never", "label": "Never made it" },
+							{ "id": "once", "label": "Made it once or twice" },
+							{ "id": "stopped", "label": "Used to make it, but stopped" },
+							{ "id": "sometimes", "label": "Make it now and then" },
+							{ "id": "often", "label": "Make it most weeks" }
+						]
+					}
+				],
+				"followUps": [
+					{
+						"id": "stopped-why",
+						"type": "multiple_choice",
+						"label": "Why did you stop making {{item.label}}? Choose all that fit.",
+						"showIf": { "question": "made", "is": "stopped" },
+						"options": [
+							{ "id": "time", "label": "It took too long" },
+							{ "id": "result", "label": "It rarely turned out well" },
+							{ "id": "eaters", "label": "Nobody at home ate it" },
+							{ "id": "bought", "label": "A shop near me makes it better" },
+							{ "id": "other", "label": "Another reason" }
+						]
+					},
+					{
+						"id": "stopped-why-other",
+						"type": "short_text",
+						"label": "What was the other reason?",
+						"showIf": { "question": "stopped-why", "includes": "other" }
+					},
+					{
+						"id": "again",
+						"type": "single_choice",
+						"label": "Would you make {{item.label}} again?",
+						"showIf": { "question": "made", "is": "stopped" },
+						"options": [
+							{ "id": "yes", "label": "Yes, when I have the time" },
+							{ "id": "recipe", "label": "Only with a better recipe" },
+							{ "id": "no", "label": "No" }
+						]
+					},
+					{
+						"id": "recipe-fix",
+						"type": "short_text",
+						"label": "What would a better recipe for {{item.label}} have to fix?",
+						"showIf": { "question": "again", "is": "recipe" }
+					}
+				],
+				"followUpsIntro": "You stopped making {{count}} of these. A few questions about each."
+			}
+		},
+		{
+			"type": "questions",
+			"id": "last",
+			"title": "Last things",
+			"questions": [
+				{
+					"id": "comments",
+					"type": "long_text",
+					"label": "Is there anything about baking at home that this survey should have asked?"
+				},
+				{
+					"id": "email",
+					"type": "email",
+					"label": "Would you like the results? Leave an email address.",
+					"description": [
+						"It is stored apart from your answers and cannot be linked to them. Leave it empty to skip."
+					],
+					"placeholder": "you@example.com",
+					"detached": true
+				},
+				{
+					"id": "contact",
+					"type": "single_choice",
+					"label": "May we write to you about a follow-up survey?",
+					"detached": true,
+					"showIf": { "question": "email", "answered": true },
+					"options": [{ "id": "yes", "label": "Yes" }, { "id": "no", "label": "No" }]
+				}
+			]
+		}
+	],
+	"end": {
+		"title": "Thank you",
+		"text": ["Your answers are saved. You can close this page."]
+	}
+}

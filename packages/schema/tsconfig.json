@@ -1,0 +1,5 @@
+{
+	"extends": "../../tsconfig.base.json",
+	// No DOM and no Node types: the definition has to work the same in a browser and in a Worker.
+	"include": ["src"]
+}
