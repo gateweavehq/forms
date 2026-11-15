@@ -64,14 +64,18 @@ silently.
 4. **Nothing about the person is stored.** No network address, no user agent, in tables or in
    logs. `device` is the viewport's rough width. Keep invocation logs off in `wrangler.jsonc`.
    The ceilings on the two open addresses are counted per form: never key a limit, a log or a
-   row by anything about the sender. Limits per address belong at Cloudflare's edge.
+   row by anything about the sender. Limits per address belong at Cloudflare's edge. One
+   exception, on the accounts' side only: requests to `/api/auth/*` are also counted per
+   sender (`server/auth/index.ts`), with the address as the counter's key and nowhere else.
 5. **A detached answer is stored without anything that names its response**: no response id,
    no time, no order of arrival, and it is sent in a request without the response's secret. The
    response's own address refuses a detached question. Do not add a column, a log or a header
    that would pair the two, and never show or export a detached answer beside a response: the
-   owner's "Kept apart" page and its export read the rows in the order of their random keys.
+   owner's "Kept apart" page and its export answer only for a closed form with at least five
+   rows, in an order drawn anew on every read, and a row is accepted only while the form is
+   open: an owner who watched rows arrive beside completion times could pair them.
    That is all it is: an operator can still infer a pairing (see
-   "What an operator could still infer" in `docs/architecture.md`), so never write "cannot be
+   "What an operator or an owner could still infer" in `docs/architecture.md`), so never write "cannot be
    linked" or "anonymous" in the app, the docs or an example.
 6. **How the cards behave is evidence, not taste.** No progress bar or percentage. Follow-ups
    after the group's status questions, never under the answer that opened them. Moving on by
@@ -109,6 +113,15 @@ silently.
     many responses it counts, "seen" and "answered" stay apart, and a median of nothing is
     nothing. The arithmetic lives in `packages/results`, with tests whose expected numbers are
     worked out by hand in the comments.
+16. **An answer that was taken back is gone.** When a saved answer closes a question, what was
+    answered under it is deleted in the same write (`reachedAnswers`, `server/responses.ts`),
+    and `packages/results` reads every response through `reached`, so that a row which escaped
+    is still on no page and in no export. A new aggregate or export takes its records through
+    `allReached`.
+17. **An id with answers under it cannot be taken**, by anyone, examples included. Responses
+    can outlive their form, and whoever took the id would be shown them. And a build that
+    serves the examples is never deployed: every script that deploys runs
+    `scripts/check-deploy.mjs` between building and deploying.
 
 ## Code style
 

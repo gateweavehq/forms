@@ -35,9 +35,11 @@ pnpm dev:setup   # once: creates the local database
 pnpm dev         # http://localhost:4770
 ```
 
-In development the first page lists the two made-up forms in [`examples/`](examples): a survey
-about baking bread at home, of the shape the product is for, and a two-question feedback form.
-Create an account at `/login` and press "Add them to my account" to see their results as well.
+In development the first page lists the made-up forms in [`examples/`](examples): a survey
+about baking bread at home, of the shape the product is for, one about herbs that asks two things
+of each item, and a two-question feedback form. Create an account at `/login` and press "Add them
+to my account" to see their results as well. Do that before answering one: an example that was
+answered while it belonged to nobody cannot be added, like any id with answers under it.
 
 ## Run a form
 
@@ -50,15 +52,28 @@ Create an account at `/login` and press "Add them to my account" to see their re
    device, where the unfinished ones stopped, every question added up, each repeated section as a
    table of its items, the responses one by one, and filters by device and by one answer. Every
    number comes with what it is out of.
-4. **Export** the responses as a wide CSV with a codebook, and the answers kept apart on their
-   own. Then delete one response or all of them: the page says how much it will remove first.
+4. **Export** the responses as a wide CSV with a codebook. Then delete one response or all of
+   them: the page says how much it will remove first. (Whoever runs the server can restore its
+   database as it was for up to 30 days.)
+5. **Close it** to read what it kept apart, such as addresses for the results: those are shown
+   and exported only once the form is closed and holds at least five, in an order drawn anew
+   each time, so that watching them arrive cannot say whose each is.
+
+The CSV files are UTF-8 and begin with a byte-order mark, so that a spreadsheet opened by
+double-click reads them right. In R, `readr::read_csv("responses.csv")` skips the mark; with
+base R use `read.csv("responses.csv", fileEncoding = "UTF-8-BOM")`. In Python,
+`pandas.read_csv("responses.csv", encoding="utf-8-sig")`. A cell that begins with `=`, `+`,
+`-` or `@` has an apostrophe put before it, so that a spreadsheet does not run an answer as a
+formula: strip a leading `'` from text columns if your analysis needs the text as typed.
 
 Only the account that brought a form in can see its results. To everyone else, signed in or not,
 its pages answer "not found", exactly as a form that does not exist.
 
-Someone answering needs no account, and can do three things about their own answers: withdraw
-before finishing (which deletes them), make their browser forget the way back, and open the
-consent text on a page of its own to print or keep.
+Someone answering needs no account, and can do three things about their own answers, from
+"Options" on any card: withdraw before finishing (which deletes them), make their browser
+forget the way back, and open the consent text on a page of its own to print or keep. An
+answer they take back by changing an earlier one (a reason for stopping, under something they
+then say they never did) is deleted at once, not kept until they finish.
 
 ## Import a form from Tally
 
@@ -105,12 +120,23 @@ Guidance for contributors and coding agents is in [AGENTS.md](AGENTS.md).
 | -------------------- | ---------------------------------------------------------------------------- |
 | `BETTER_AUTH_SECRET` | Required secret. Signs the sessions of the people who run forms              |
 | `BETTER_AUTH_URL`    | Optional. The app's own URL, which requests that change something must match |
-| `SIGN_UP_ALLOW`      | Optional. Who may make an account: addresses and `@domains`, comma-separated |
+| `SIGN_UP_ALLOW`      | Optional. Who may make an account: whole addresses, comma-separated          |
 | `FORMS_EXAMPLES`     | `"1"` serves the forms in `examples/`. For development and tests only        |
 
 `pnpm dev:setup` writes a `.dev.vars` with a random secret. On a deployment, set
 `BETTER_AUTH_URL` and `SIGN_UP_ALLOW`: without the second, anyone who reaches the server can make
 an account and bring forms in.
+
+No email is sent yet, so no address can be verified. That shapes the list:
+
+- It takes whole addresses. An entry that names a domain (`@example.org`) is ignored, and the
+  log says so: it would admit anyone who types an address there.
+- A listed address belongs to whoever signs up with it first. **Sign up straight after listing
+  your address.**
+
+Deploy with `pnpm --filter @gateweave/forms-web deploy:staging` (or a script like it), not with
+`wrangler deploy` on a build of your own: the script checks that the build does not serve the
+example forms, which a build made for the browser tests does.
 
 ## Licence
 

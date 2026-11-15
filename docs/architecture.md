@@ -158,12 +158,34 @@ the respondent's API reads a session, and nothing on the owner's side takes a re
   keeps it off the POSTs other sites start in current browsers. Every request that is not a GET
   must carry the app's own `Origin` as well, so that this does not rest on one browser default.
 - **Sessions hold nothing about the device.** Better Auth's columns for the network address and
-  the user agent are stored empty, and its limiter, which counts by address, is off. Tries at
-  signing in or up are counted per email address tried (`AUTH_LIMIT`).
-- **Who may make an account** is `SIGN_UP_ALLOW`: addresses and `@domains`. Without it anyone
-  can, so a deployment should set it.
+  the user agent are stored empty, and its own limiter is off.
+- **Tries are counted three ways** through Rate Limiting bindings, before Better Auth sees the
+  request:
+  - _Per email address tried_ (`AUTH_LIMIT`, ten a minute), for signing in and signing up. This
+    is what stops guessing at one account's password, wherever the guesses come from. It has a
+    cost that should be known: someone who keeps trying a known address holds its owner out of
+    signing in for as long as they keep at it.
+  - _Per account_ (the same binding), for changing a password, which asks for the current one
+    and would otherwise be a way to guess at it with a stolen session.
+  - _Per sender_ (`AUTH_SENDER_LIMIT`, thirty a minute), for every request to `/api/auth/*`
+    that is not a read, so that one sender cannot go through a list of addresses. This is the
+    one place the Worker reads a network address (`CF-Connecting-IP`). It is the key of that
+    counter and nothing else: not stored, not logged, and never read for anything a respondent
+    sends.
+- **Who may make an account** is `SIGN_UP_ALLOW`: whole email addresses. Without it anyone
+  can, so a deployment should set it. Two things follow from there being no email yet, so that
+  no address can be verified:
+  - An entry that names a domain (`@example.org`) is **ignored**, and the log says so once. It
+    would admit anyone who types an address at that domain. A list of nothing but domains
+    admits nobody.
+  - A listed address belongs to **whoever signs up with it first**. Sign up straight after
+    listing an address, and list no address whose owner will not.
 
-There is no email yet, so no password reset and no verification of an address.
+  With the list set, an address that is not on it and one that is on it and already has an
+  account get the same answer, so the list cannot be read off by trying addresses.
+
+There is no email yet, so no password reset and no verification of an address. `/update-user`
+is switched off: no page uses it, and it would store a picture's address.
 
 ### Results (`packages/results`)
 
@@ -190,8 +212,13 @@ made-up responses with the working written beside them.
   questions under `<item>.<question>`; the codebook says what each column and value means. A
   cell that begins with `=`, `+`, `-` or `@` gets a leading apostrophe: answers are typed by
   strangers, and a spreadsheet would run them for the person who opens the file.
-- **What is kept apart** has its own page and its own export, read in the order of the rows'
-  random keys. It never appears beside a response.
+- **What is kept apart** has its own page and its own export, and never appears beside a
+  response. Both answer only once the form is **closed** and holds **at least five** such rows,
+  and give them in an order drawn anew on every read; before that the page says why, and how
+  many are missing. The reasons are under "What an operator or an owner could still infer".
+- **Taken-back answers are left out.** Everything in the package reads a response through
+  `reached`, which keeps only what the response's own flow asks. The server removes such rows
+  itself (see Storage); the results do not rely on that.
 
 A page reads every response of the version it shows. That is fine for the hundreds a study
 gets; a form with many thousands would want its counts kept as they change.
@@ -210,7 +237,8 @@ things stand in the way of a flood, and a third is planned:
   so it is a ceiling and not an exact count.
 - **At Cloudflare's edge, a rule per address**, which the operator sets and the Worker never
   sees: a WAF rate-limiting rule on `POST /api/forms/*` (for example, a few requests a minute
-  from one address). This is what stops one sender without stopping everyone, and it keeps the
+  from one address), and one on `POST /api/auth/*` (for example, twenty a minute). The second
+  backs up the Worker's own count per sender, and stops a flood before it costs a request. This is what stops one sender without stopping everyone, and it keeps the
   address out of the Worker, its tables and its logs. It is not part of this repository: a
   deployment without it has the ceiling only.
 - **Later, Turnstile on Start**, so that a response is started by a browser a person is using.
@@ -230,11 +258,23 @@ things stand in the way of a flood, and a third is planned:
   forms. Deleting a `user` row deletes their `form` rows and leaves the responses, and the app
   has no way to delete an account yet.
 
-While a response is open, an answer stays stored even when a later change hides its question:
-changing back brings it back. **At completion, answers to questions the final flow does not
-contain are deleted.** They were taken back with the answer they hung on, and a finished
-response should hold what was asked and nothing else. Deleting was chosen over marking because
-a mark is something every export and count would have to remember.
+**An answer to a question the flow no longer asks is deleted when the answer that closed the
+question is saved.** Someone who changes "stopped" to "never" has taken back why they stopped,
+whether or not they go on to finish; kept until completion, it would sit in the results of
+exactly the responses that were not finished. The page drops it from its own copy at the same
+moment, so changing the answer back asks the follow-up again, empty. Completion applies the
+rule once more, for a row that got past it. Deleting was chosen over marking because a mark is
+something every export and count would have to remember. The rule is one function,
+`reachedAnswers` in `packages/schema`, used by the server, the page and the results.
+
+A definition is stored as one row and may weigh at most 1 MB (D1 takes no row above 2 MB); a
+larger one is refused before anything is stored. One nested more than 32 levels deep is
+refused before its shape is read. A question's id may not be one of the export's own column
+names (`response`, `device`, `started`, `completed`, `active_seconds`), nor an item's id.
+
+"Deleted" means removed from the database as it is now. D1 keeps 30 days of history (Time
+Travel), from which whoever runs the deployment can restore the database as it was. The app
+says so wherever it deletes.
 
 A response is checked against the definition it started under, for as long as it is open, and
 the page asks that definition's questions: when the form has changed since, `GET
@@ -255,25 +295,44 @@ questions they were given to, so the results side will read them against the sam
   own numbering is the order of arrival, which would pair each row with the response completed
   just before it.
 
-### What an operator could still infer
+### What an operator or an owner could still infer
 
 "Stored without anything that names your response" is what the storage gives, and the app, the
-docs and the examples promise no more than that. It is not unlinkability. Whoever runs the
-deployment, or reads its database, could still pair a detached answer with a response:
+docs and the examples promise no more than that. It is not unlinkability. Two kinds of people
+could try to pair a detached answer with a response, and they can do different things.
 
-- **By counting, on a small sample.** If one response is complete and one detached row exists,
-  they belong together. The same goes for the first few of any study.
-- **By time, through D1's history.** A response's `completed_at` is stored to the millisecond,
+**The form's owner** sees responses arrive, each with its time of completion. A list of
+detached answers that grew beside them would pair every row with the response completed just
+before it. So the owner is shown them, on the page and in the export, only when the form is
+closed and holds at least five, in an order drawn anew on every read, and a row is accepted
+only while the form is open. What remains for an owner:
+
+- **Counting, on a very small study.** Five rows among five completed responses are those five
+  people's, whatever the order. The threshold keeps one row from being one person; it does not
+  make a handful of people a crowd.
+- **Reopening and closing.** An owner who closes a form, looks, opens it again and closes it
+  after the next completion sees one row more than before, and the rows are few enough to
+  compare. Nothing stops this. It takes intent, and it leaves the form's state changes behind
+  as the only trace.
+- **The count while the form is open.** The settings page says how many rows a form holds, so
+  that deleting can say what it removes. Watching that number says that the person who just
+  finished left something, though not what.
+
+**Whoever runs the deployment**, or reads its database, has all of that and more:
+
+- **Time, through D1's history.** A response's `completed_at` is stored to the millisecond,
   and its detached answer arrives seconds later. The row carries no time, but D1 keeps 30 days
   of history (Time Travel): the database as it was at a given moment can be restored, which
   shows when a row first existed. Compared with completion times, that pairs rows with
   responses whenever completions are not close together.
-- **By Cloudflare's own records of requests**, to whatever extent the account keeps any. The
+- **Cloudflare's own records of requests**, to whatever extent the account keeps any. The
   Worker's invocation logs are off; the two requests still came from one connection.
+- **The table itself**, without the threshold or the shuffle, which are the app's and not the
+  database's.
 
-Closing the second would take holding detached answers back and writing them in shuffled
-batches, so that a row's first appearance says nothing about one response. That is not built.
-A study that needs more than "not named" should collect contact details somewhere else.
+Closing the first of those would take holding detached answers back and writing them in
+shuffled batches, so that a row's first appearance says nothing about one response. That is not
+built. A study that needs more than "not named" should collect contact details somewhere else.
 
 ### Why the cards behave as they do
 
