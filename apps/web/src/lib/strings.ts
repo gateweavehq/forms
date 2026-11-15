@@ -235,8 +235,13 @@ export const strings = {
 			replaceLead:
 				"Editing a form means bringing in a new definition with the same id. Responses already begun keep the one they started under.",
 			deleteTitle: "Delete every response",
-			deleteLead: (responses: number, answers: number, detached: number) =>
-				`This form holds ${responses} ${responses === 1 ? "response" : "responses"} with ${answers} ${answers === 1 ? "answer" : "answers"}, and ${detached} ${detached === 1 ? "answer" : "answers"} kept apart.`,
+			/** `detached` is null while the form is open: how many there are is not said then. */
+			deleteLead: (responses: number, answers: number, detached: number | null) =>
+				`This form holds ${responses} ${responses === 1 ? "response" : "responses"} with ${answers} ${answers === 1 ? "answer" : "answers"}${
+					detached === null
+						? ". Answers kept apart, if there are any, are removed too: how many there are is shown once the form is closed."
+						: `, and ${detached} ${detached === 1 ? "answer" : "answers"} kept apart.`
+				}`,
 			deleteAll: "Delete all responses",
 			deleteAllTitle: "Delete every response of this form?",
 			deleteAllBody:

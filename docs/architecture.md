@@ -314,9 +314,10 @@ only while the form is open. What remains for an owner:
   after the next completion sees one row more than before, and the rows are few enough to
   compare. Nothing stops this. It takes intent, and it leaves the form's state changes behind
   as the only trace.
-- **The count while the form is open.** The settings page says how many rows a form holds, so
-  that deleting can say what it removes. Watching that number says that the person who just
-  finished left something, though not what.
+
+The number of kept-apart rows is not said while a form is open either: the settings page and
+its delete dialog say only that such answers, if there are any, are removed too. A number that
+went up just after a completion would say that this person left something.
 
 **Whoever runs the deployment**, or reads its database, has all of that and more:
 

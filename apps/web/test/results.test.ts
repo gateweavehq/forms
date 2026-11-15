@@ -351,10 +351,11 @@ describe("deleting", () => {
 
 	it("says how much there is before removing all of it, and then removes it", async () => {
 		const settings = await page("/settings");
-		// Five answers and three, and one row kept apart.
+		// Five answers and three. The form is open, so how many are kept apart is not said.
 		expect(settings).toContain(
-			"This form holds 2 responses with 8 answers, and 1 answer kept apart.",
+			"This form holds 2 responses with 8 answers. Answers kept apart, if there are any, are removed too",
 		);
+		expect(settings).not.toMatch(/\d+ answers? kept apart/);
 		const removed = await ownerCall("DELETE", `forms/${FORM}/responses`);
 		expect(removed.status).toBe(200);
 		expect(await count(`SELECT count(*) AS n FROM response WHERE form_id = '${FORM}'`)).toBe(0);

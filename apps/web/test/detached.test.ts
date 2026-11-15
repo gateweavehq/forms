@@ -80,6 +80,42 @@ describe("leaving something to be kept apart", () => {
 	});
 });
 
+describe("how many are kept apart", () => {
+	const settings = async () => {
+		const response = await forms.fetch(`/forms/${FORM}/settings`, as(owner));
+		expect(response.status).toBe(200);
+		return response.text();
+	};
+
+	it("is not said while the form is open, on the page or in what the page was sent", async () => {
+		await setState("open");
+		const before = await settings();
+		expect(before).toContain(
+			"Answers kept apart, if there are any, are removed too: how many there are is shown once the form is closed.",
+		);
+		expect(before).not.toMatch(/\d+ answers? kept apart/);
+		// The page's own data, which the browser gets beside the markup, has no number either.
+		expect(before).not.toMatch(/detached[^a-z]{1,6}4/);
+		// One more row changes nothing a watching owner could see.
+		expect((await leave(address(9))).status).toBe(201);
+		const after = await settings();
+		const said = (html: string) => html.match(/This form holds[^<]*/g);
+		expect(said(after)).toEqual(said(before));
+		expect(said(after)?.length).toBeGreaterThan(0);
+		expect(after).not.toMatch(/\d+ answers? kept apart/);
+		await forms.db
+			.prepare("DELETE FROM detached_answer WHERE form_id = ? AND answers LIKE '%reader-9@%'")
+			.bind(FORM)
+			.run();
+		expect(await stored()).toBe(4);
+	});
+
+	it("is said once the form is closed, where deleting says what it removes", async () => {
+		await setState("closed");
+		expect(await settings()).toContain("and 4 answers kept apart.");
+	});
+});
+
 describe("reading what is kept apart", () => {
 	it("is not possible while there are fewer than five, and the page says how many are missing", async () => {
 		const html = await page();

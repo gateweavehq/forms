@@ -90,7 +90,9 @@ function SettingsPage() {
 			<section className="flex flex-col gap-3">
 				<h2 className="text-lg font-semibold">{t.deleteTitle}</h2>
 				<p>{t.deleteLead(holds.responses, holds.answers, holds.detached)}</p>
-				{holds.responses + holds.detached > 0 && (
+				{/* While the form is open the button is always there: leaving it out when nothing
+				    is kept apart would say what the line above does not. */}
+				{(holds.detached === null || holds.responses + holds.detached > 0) && (
 					<div>
 						<ConfirmButton
 							label={t.deleteAll}

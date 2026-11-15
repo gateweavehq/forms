@@ -359,7 +359,13 @@ export async function deleteResponse(
 	return removed.meta.changes > 0;
 }
 
-/** How much a form holds, for the page that asks before deleting it. */
+/**
+ * How much a form holds, for the page that asks before deleting it.
+ *
+ * The number of kept-apart answers is given only for a closed form. While a form takes
+ * answers its owner sees each response arrive, and a number that went up just after one was
+ * completed would say that this person left something. `null` is "not said", not "none".
+ */
 export async function holdings(db: Database, row: FormRow) {
 	const [responses, answers, detached] = await db.batch([
 		db.select({ n: count() }).from(response).where(eq(response.formId, row.id)),
@@ -373,7 +379,7 @@ export async function holdings(db: Database, row: FormRow) {
 	return {
 		responses: responses[0]?.n ?? 0,
 		answers: answers[0]?.n ?? 0,
-		detached: detached[0]?.n ?? 0,
+		detached: row.state === "closed" ? (detached[0]?.n ?? 0) : null,
 	};
 }
 
