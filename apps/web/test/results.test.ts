@@ -265,6 +265,11 @@ describe("the exports", () => {
 			/^attachment; filename="plants-results-responses-[0-9a-f]{8}\.csv"$/,
 		);
 		expect(response.headers.get("Cache-Control")).toBe("no-store");
+		// A byte-order mark first, so that a spreadsheet reads the file as UTF-8. Reading the
+		// answer as text drops it, as tools that know about it do.
+		expect(new Uint8Array(await (await exported("responses")).arrayBuffer()).slice(0, 3)).toEqual(
+			new Uint8Array([0xef, 0xbb, 0xbf]),
+		);
 		const lines = (await response.text()).split("\r\n");
 		expect(lines[0]).toBe(
 			[

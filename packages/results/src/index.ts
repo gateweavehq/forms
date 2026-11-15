@@ -3,6 +3,7 @@ export {
 	type Column,
 	codebookCsv,
 	detachedCsv,
+	FIXED_COLUMNS,
 	responsesCsv,
 	toCsv,
 } from "./csv";

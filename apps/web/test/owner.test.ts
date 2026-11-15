@@ -147,6 +147,81 @@ describe("bringing a form in", () => {
 		expect((await kept.text()).replaceAll("left-behind", id)).toBe(await taken.text());
 	});
 
+	it("refuses a rule nested without end, and never with a fault of its own", async () => {
+		const cookie = await signUp(forms);
+		const id = freshId();
+		let rule: unknown = { question: "light", is: "bright" };
+		for (let level = 0; level < 20_000; level++) rule = { not: rule };
+		const deep = plantForm(id) as { sections: Array<{ questions?: Array<{ showIf?: unknown }> }> };
+		const second = deep.sections[0]?.questions?.[1];
+		if (!second) throw new Error("The form has no second question");
+		second.showIf = rule;
+
+		const previewed = await call(cookie, "POST", "preview", {
+			kind: "definition",
+			text: JSON.stringify(deep),
+		});
+		expect(previewed.status).toBe(200);
+		const result = (await previewed.json()) as { ok: boolean; problems: string[] };
+		expect(result.ok).toBe(false);
+		expect(result.problems.join()).toContain("nested more than 32 levels");
+
+		const created = await call(cookie, "POST", "forms", { definition: deep });
+		expect(created.status).toBe(400);
+		const asTally = await call(cookie, "POST", "preview", {
+			kind: "tally",
+			text: JSON.stringify({ blocks: [{ payload: rule }] }),
+		});
+		expect(asTally.status).toBe(200);
+		expect(await asTally.json()).toMatchObject({ ok: false });
+		expect(await formRow(id)).toBeNull();
+	});
+
+	it("refuses a question whose id the export needs for its own columns", async () => {
+		const cookie = await signUp(forms);
+		const id = freshId();
+		const clashing = plantForm(id) as { sections: Array<{ questions?: Array<{ id: string }> }> };
+		const second = clashing.sections[0]?.questions?.[1];
+		if (!second) throw new Error("The form has no second question");
+		second.id = "device";
+		const created = await call(cookie, "POST", "forms", { definition: clashing });
+		expect(created.status).toBe(400);
+		expect(JSON.stringify(await created.json())).toContain("cannot be a question's id");
+		expect(await formRow(id)).toBeNull();
+	});
+
+	it("refuses a definition too large to be stored as one row, before storing anything", async () => {
+		const cookie = await signUp(forms);
+		const id = freshId();
+		const heavy = plantForm(id) as { sections: Array<{ text?: string[] }> };
+		const [first] = heavy.sections;
+		if (!first) throw new Error("The form has no section");
+		first.text = ["long ".repeat(220_000)];
+		const previewed = await call(cookie, "POST", "preview", {
+			kind: "definition",
+			text: JSON.stringify(heavy),
+		});
+		const result = (await previewed.json()) as { ok: boolean; problems: string[] };
+		expect(result.ok).toBe(false);
+		expect(result.problems.join()).toContain("a form can be at most 1000 KB");
+		const created = await call(cookie, "POST", "forms", { definition: heavy });
+		expect(created.status).toBe(400);
+		expect(await formRow(id)).toBeNull();
+		const rows = await forms.db
+			.prepare("SELECT count(*) AS n FROM definition WHERE form_id = ?")
+			.bind(id)
+			.first<{ n: number }>();
+		expect(rows?.n).toBe(0);
+
+		// The same for a new definition of a form that exists.
+		const own = await ownerWithForm();
+		const replaced = await call(own.cookie, "POST", `forms/${own.id}/definition`, {
+			definition: { ...heavy, id: own.id },
+		});
+		expect(replaced.status).toBe(400);
+		expect(await formRow(own.id)).toMatchObject({ title: "Plants at home" });
+	});
+
 	it("takes nothing larger than a form can be", async () => {
 		const cookie = await signUp(forms);
 		const response = await call(cookie, "POST", "preview", {
@@ -191,6 +266,18 @@ describe("a form's state", () => {
 		const { cookie, id } = await ownerWithForm();
 		const response = await call(cookie, "POST", `forms/${id}/state`, { state: "archived" });
 		expect(response.status).toBe(400);
+	});
+
+	it("cannot go back to a draft once it was opened, open or closed", async () => {
+		const { cookie, id } = await ownerWithForm();
+		const back = await call(cookie, "POST", `forms/${id}/state`, { state: "draft" });
+		expect(back.status).toBe(400);
+		expect(await formRow(id)).toMatchObject({ state: "open" });
+		await call(cookie, "POST", `forms/${id}/state`, { state: "closed" });
+		expect((await call(cookie, "POST", `forms/${id}/state`, { state: "draft" })).status).toBe(400);
+		expect(await formRow(id)).toMatchObject({ state: "closed" });
+		// Its link goes on saying what is true.
+		expect(await (await forms.fetch(`/f/${id}`)).text()).not.toContain("not open yet");
 	});
 });
 

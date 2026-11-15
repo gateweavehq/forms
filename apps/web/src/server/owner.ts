@@ -131,30 +131,52 @@ export interface PreviewRequest {
  * Nothing is stored.
  */
 export function preview(request: PreviewRequest): Preview {
+	let definition: Definition;
+	let report: ImportReport | null = null;
 	if (request.kind === "tally") {
-		const result = importTally(request.text, {
-			acceptDifferences: request.acceptDifferences === true,
-			detachEmail: request.detachEmail === true,
-			...(request.id ? { id: request.id } : {}),
-		});
+		let result: ReturnType<typeof importTally>;
+		try {
+			result = importTally(request.text, {
+				acceptDifferences: request.acceptDifferences === true,
+				detachEmail: request.detachEmail === true,
+				...(request.id ? { id: request.id } : {}),
+			});
+		} catch (error) {
+			// Page data nested without end runs the importer out of stack. That is the input's
+			// fault, and is said as such.
+			if (!(error instanceof RangeError)) throw error;
+			return { ok: false, problems: ["This is nested too deeply to be a Tally form's page."] };
+		}
 		if (!result.ok) return { ok: false, problems: result.problems };
-		const { definition, report } = result;
-		return { ok: true, definition, summary: summarise(definition), report };
+		definition = result.definition;
+		report = result.report;
+	} else {
+		let data: unknown;
+		try {
+			data = JSON.parse(request.text);
+		} catch {
+			return { ok: false, problems: ["This is not JSON. A definition is a JSON document."] };
+		}
+		const parsed = parseDefinition(data);
+		if (!parsed.ok) return { ok: false, problems: formatProblems(parsed.problems).split("\n") };
+		definition = parsed.definition;
 	}
-	let data: unknown;
-	try {
-		data = JSON.parse(request.text);
-	} catch {
-		return { ok: false, problems: ["This is not JSON. A definition is a JSON document."] };
-	}
-	const parsed = parseDefinition(data);
-	if (!parsed.ok) return { ok: false, problems: formatProblems(parsed.problems).split("\n") };
-	return {
-		ok: true,
-		definition: parsed.definition,
-		summary: summarise(parsed.definition),
-		report: null,
-	};
+	const large = tooLarge(definition);
+	if (large) return { ok: false, problems: [large] };
+	return { ok: true, definition, summary: summarise(definition), report };
+}
+
+/**
+ * The most a definition may weigh as stored, in bytes. D1 takes no row above 2 MB, and a
+ * definition is one row; half of that leaves room, and is far more than any form's words.
+ */
+export const MAX_DEFINITION_BYTES = 1_000_000;
+
+function tooLarge(definition: Definition): string | undefined {
+	const bytes = new TextEncoder().encode(JSON.stringify(definition)).length;
+	return bytes > MAX_DEFINITION_BYTES
+		? `This definition is ${Math.ceil(bytes / 1000)} KB, and a form can be at most ${MAX_DEFINITION_BYTES / 1000} KB. Long texts are what weighs: shorten them, or link to them.`
+		: undefined;
 }
 
 /** Checks a definition that arrives to be stored: the page sends back what `preview` gave it. */
@@ -167,6 +189,8 @@ function checked(input: unknown): Definition {
 			formatProblems(parsed.problems).split("\n"),
 		);
 	}
+	const large = tooLarge(parsed.definition);
+	if (large) throw new Refused(400, "This is not a valid definition.", [large]);
 	return parsed.definition;
 }
 

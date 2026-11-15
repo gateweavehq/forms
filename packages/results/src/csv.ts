@@ -165,6 +165,12 @@ export function answerColumns(definition: Definition): Column[] {
 	});
 }
 
+/**
+ * The columns every export begins with. Their names are the ids a question may not have
+ * (`RESERVED_QUESTION_IDS` in the schema package): a test holds that the two lists are one.
+ */
+export const FIXED_COLUMNS = ["response", "device", "started", "completed", "active_seconds"];
+
 const FIXED = [
 	["response", "The response's id"],
 	["device", "phone; tablet; desk: the rough size of the screen it was started on"],

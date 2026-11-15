@@ -73,9 +73,11 @@ export {
 export {
 	checkDefinition,
 	formatProblems,
+	MAX_NESTING,
 	type ParseResult,
 	type Problem,
 	parseDefinition,
+	RESERVED_QUESTION_IDS,
 } from "./validate";
 export {
 	type AnswerValue,

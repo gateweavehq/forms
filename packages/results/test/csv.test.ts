@@ -1,6 +1,13 @@
-import { detachedQuestions } from "@gateweave/forms-schema";
+import { detachedQuestions, RESERVED_QUESTION_IDS } from "@gateweave/forms-schema";
 import { describe, expect, it } from "vitest";
-import { answerColumns, codebookCsv, detachedCsv, responsesCsv, toCsv } from "../src";
+import {
+	answerColumns,
+	codebookCsv,
+	detachedCsv,
+	FIXED_COLUMNS,
+	responsesCsv,
+	toCsv,
+} from "../src";
 import { games, responses } from "./games";
 
 const lines = (csv: string) => csv.split("\r\n");
@@ -22,6 +29,17 @@ describe("CSV", () => {
 		expect(toCsv(["a"], [["=1+1"], ["+1"], ["-1"], ["@x"], [-1]])).toBe(
 			"a\r\n'=1+1\r\n'+1\r\n'-1\r\n'@x\r\n-1\r\n",
 		);
+	});
+
+	it("does so when the formula hides behind a tab or a carriage return", () => {
+		// Some spreadsheets drop those two from the start of a cell and then read what follows.
+		// The carriage return also has to be quoted, like any line break in a cell.
+		expect(toCsv(["a"], [["\t=1+1"], ["\r=1+1"]])).toBe("a\r\n'\t=1+1\r\n\"'\r=1+1\"\r\n");
+	});
+
+	it("names its own columns by the ids no question may have", () => {
+		expect(FIXED_COLUMNS).toEqual([...RESERVED_QUESTION_IDS]);
+		expect(lines(responsesCsv(games, []))[0]?.split(",").slice(0, 5)).toEqual(FIXED_COLUMNS);
 	});
 });
 

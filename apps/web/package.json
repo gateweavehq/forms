@@ -20,7 +20,6 @@
 		"deploy:staging": "vite build --mode staging && node scripts/check-deploy.mjs && wrangler deploy --cwd ../.."
 	},
 	"dependencies": {
-		"@better-auth/core": "1.7.20",
 		"@fontsource-variable/inter": "5.3.0",
 		"@gateweave/forms-results": "workspace:*",
 		"@gateweave/forms-schema": "workspace:*",

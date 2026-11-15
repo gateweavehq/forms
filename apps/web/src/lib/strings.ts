@@ -198,7 +198,7 @@ export const strings = {
 			deleteResponse: "Delete this response",
 			deleteResponseTitle: "Delete this response?",
 			deleteResponseBody:
-				"This removes the response and its answers for good. Answers kept apart are not connected to it and stay.",
+				"This removes the response and its answers, and the app cannot bring them back. Answers kept apart are not connected to it and stay. Whoever runs this server can still restore the database as it was for up to 30 days.",
 			exports: "Export",
 			exportsLead:
 				"The responses to this version as CSV, one row each, and a codebook that says what each column and value means. The filter does not apply to an export.",
@@ -240,7 +240,7 @@ export const strings = {
 			deleteAll: "Delete all responses",
 			deleteAllTitle: "Delete every response of this form?",
 			deleteAllBody:
-				"This removes all of them for good, the answers kept apart included. The form, its link and its definitions stay. Export first if you need the data.",
+				"This removes all of them, the answers kept apart included, and the app cannot bring them back. The form, its link and its definitions stay. Export first if you need the data. Whoever runs this server can still restore the database as it was for up to 30 days.",
 			deleteAllConfirm: (responses: number) =>
 				`Delete ${responses} ${responses === 1 ? "response" : "responses"}`,
 		},
@@ -293,14 +293,15 @@ export const strings = {
 		forget: "Forget on this device",
 		withdrawTitle: "Withdraw",
 		withdrawBody:
-			"Deletes everything you have answered so far, for good. You can do this until you finish the form.",
+			"Deletes everything you have answered so far. You can do this until you finish the form. The server's database can still be restored as it was for up to 30 days.",
 		withdraw: "Delete my answers",
 		withdrawSure: "This cannot be undone.",
 		withdrawConfirm: "Yes, delete them",
 		withdrawFailed: "Your answers could not be deleted. Check your connection and try again.",
 		close: "Close",
 		withdrawnTitle: "Your answers were deleted",
-		withdrawnBody: "Nothing you answered is stored any more. You can close this page.",
+		withdrawnBody:
+			"What you answered was deleted, and nobody who runs this form can see it. The server's database can still be restored as it was for up to 30 days. You can close this page.",
 	},
 	consentCopy: {
 		heading: "Consent text",

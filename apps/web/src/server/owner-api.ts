@@ -31,7 +31,9 @@ const previewBody = z.strictObject({
 	id: z.string().max(64).optional(),
 });
 const definitionBody = z.strictObject({ definition: z.unknown() });
-const stateBody = z.strictObject({ state: z.enum(["draft", "open", "closed"]) });
+// Not "draft": a form that was opened has been seen by people, and may have their answers.
+// Going back to a draft would make its link say it is not open yet, which would not be true.
+const stateBody = z.strictObject({ state: z.enum(["open", "closed"]) });
 
 function json(body: unknown, status = 200): Response {
 	return Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
@@ -42,7 +44,10 @@ function json(body: unknown, status = 200): Response {
  * no quoting. It is never kept by anything between the server and the person.
  */
 function csv(name: string, text: string): Response {
-	return new Response(text, {
+	// A byte-order mark first. Without it a spreadsheet opened by double-click reads UTF-8 as
+	// the machine's own encoding, and every letter outside ASCII comes out wrong without a
+	// word of warning. Tools that read CSV for analysis skip the mark or can be told to.
+	return new Response(`\uFEFF${text}`, {
 		headers: {
 			"Content-Type": "text/csv; charset=utf-8",
 			"Content-Disposition": `attachment; filename="${name}.csv"`,

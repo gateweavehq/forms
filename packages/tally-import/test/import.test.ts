@@ -3,11 +3,13 @@ import {
 	emptyAnswers,
 	flow,
 	type Question,
+	RESERVED_QUESTION_IDS,
 	type RepeatSection,
 	withAnswer,
 } from "@gateweave/forms-schema";
 import { describe, expect, it } from "vitest";
 import { type ImportOptions, type ImportReport, importTally } from "../src";
+import { Ids } from "../src/ids";
 import { bakingForm, GROUPS, REASONS, type Slips, STATUS } from "./baking-form";
 import { TallyBuilder } from "./tally-builder";
 
@@ -579,6 +581,29 @@ describe("smaller things", () => {
 		expect(second?.type === "single_choice" && second.options.map((option) => option.id)).toEqual([
 			"no",
 			"no-2",
+		]);
+	});
+});
+
+describe("the ids the importer hands out", () => {
+	it("are never ones the export of responses needs for its own columns", () => {
+		const ids = new Ids(RESERVED_QUESTION_IDS);
+		expect(ids.take("Device", "question")).toBe("device-2");
+		expect(ids.take("Device", "question")).toBe("device-3");
+		expect(ids.take("Completed?", "question")).toBe("completed-2");
+		expect(ids.take("Your kitchen", "question")).toBe("your-kitchen");
+	});
+
+	it("give a question titled like one of those columns another id", () => {
+		const tally = new TallyBuilder();
+		tally.formTitle("A made-up form");
+		tally.title("Device");
+		tally.input("INPUT_TEXT");
+		const result = importTally({ blocks: tally.blocks }, { id: "made-up" });
+		if (!result.ok) throw new Error(result.problems.join("\n"));
+		const [section] = result.definition.sections;
+		expect(section?.type === "questions" && section.questions.map(({ id }) => id)).toEqual([
+			"device-2",
 		]);
 	});
 });
