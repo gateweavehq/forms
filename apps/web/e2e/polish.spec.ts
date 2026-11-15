@@ -712,12 +712,15 @@ test("keeps the options in one menu that a keyboard can open and close", async (
 	await expect(autoAdvance).not.toBeChecked();
 	await page.keyboard.press("Tab");
 	await expect(page.getByRole("button", { name: "Continue on another device" })).toBeFocused();
+	await page.keyboard.press("Tab");
+	await expect(page.getByRole("button", { name: "Your answers and this device" })).toBeFocused();
 	// Escape closes it and gives the focus back to its button.
 	await page.keyboard.press("Escape");
 	await expect(options).toBeFocused();
 	await expect(autoAdvance).toBeHidden();
-	// Tabbing out of it closes it too.
+	// Tabbing out of it closes it too: past its three entries, and one more.
 	await page.keyboard.press("Enter");
+	await page.keyboard.press("Tab");
 	await page.keyboard.press("Tab");
 	await page.keyboard.press("Tab");
 	await page.keyboard.press("Tab");
