@@ -23,7 +23,12 @@ import { type Database, runBatch } from "./db";
 import { answer, definition as definitions, detachedAnswer, response } from "./db/schema";
 import type { Form } from "./forms";
 import { randomToken, sealSecret, secretMatches } from "./secret";
-import { keepApartStatement, startStatements, withdrawStatements } from "./statements";
+import {
+	keepApartStatement,
+	type Statement,
+	startStatements,
+	withdrawStatements,
+} from "./statements";
 
 export type Device = "phone" | "tablet" | "desk";
 
@@ -87,7 +92,7 @@ export async function createResponse(
 	// and its owner can close or delete it in between: a response written after its form was
 	// deleted would lie under an id nobody owns, where no one could find or delete it.
 	const changed = await runBatch(
-		db.$client,
+		db,
 		startStatements({
 			id,
 			formId,
@@ -269,10 +274,10 @@ export async function saveProgress(
 		: [];
 	// Written as SQL, because the insert has to be conditional too and Drizzle's cannot be.
 	// SQLite evaluates every right-hand side of the update against the row as it was.
-	const d1 = db.$client;
-	const upsert = d1
-		.prepare(
-			`INSERT INTO answer (response_id, question_id, item_id, value, active_ms, changes, updated_at)
+	// The answer is a value of the statement (`?4`), never part of its text: the text is what a
+	// failure logs.
+	const upsert: Statement = {
+		sql: `INSERT INTO answer (response_id, question_id, item_id, value, active_ms, changes, updated_at)
 			SELECT ?1, ?2, ?3, ?4, ?5, 0, ?6
 			WHERE EXISTS (SELECT 1 FROM response WHERE id = ?1 AND completed_at IS NULL)
 			ON CONFLICT (response_id, question_id, item_id) DO UPDATE SET
@@ -280,25 +285,30 @@ export async function saveProgress(
 				value = excluded.value,
 				active_ms = answer.active_ms + excluded.active_ms,
 				updated_at = excluded.updated_at`,
-		)
-		.bind(row.id, checked.questionId, checked.itemId, checked.value, progress.answer.activeMs, now);
-	const place = d1
-		.prepare(
-			`UPDATE response SET updated_at = ?2, position = COALESCE(?3, position)
+		params: [
+			row.id,
+			checked.questionId,
+			checked.itemId,
+			checked.value,
+			progress.answer.activeMs,
+			now,
+		],
+	};
+	const place: Statement = {
+		sql: `UPDATE response SET updated_at = ?2, position = COALESCE(?3, position)
 			WHERE id = ?1 AND completed_at IS NULL`,
-		)
-		.bind(row.id, now, progress.position ?? null);
-	const taken = stale.map(({ questionId, itemId }) =>
-		d1
-			.prepare(
-				`DELETE FROM answer WHERE response_id = ?1 AND question_id = ?2 AND item_id = ?3
+		params: [row.id, now, progress.position ?? null],
+	};
+	const taken = stale.map(
+		({ questionId, itemId }): Statement => ({
+			sql: `DELETE FROM answer WHERE response_id = ?1 AND question_id = ?2 AND item_id = ?3
 				AND EXISTS (SELECT 1 FROM response WHERE id = ?1 AND completed_at IS NULL)`,
-			)
-			.bind(row.id, questionId, itemId),
+			params: [row.id, questionId, itemId],
+		}),
 	);
 	// Together or not at all: an answer without its place would resume one step behind.
-	const [, placed] = await d1.batch([upsert, place, ...taken]);
-	if (placed?.meta.changes === 0) throw new Refusal(409, "This response is complete.");
+	const [, placed] = await runBatch(db, [upsert, place, ...taken]);
+	if (placed === 0) throw new Refusal(409, "This response is complete.");
 }
 
 /** For each definition, the ids of the questions some other question's rule looks at. */
@@ -401,7 +411,7 @@ export async function withdrawResponse(
 	// one that closes the form, can arrive in between, so each statement asks again, and all of
 	// them ask the same thing: they change something together or not at all.
 	const changed = await runBatch(
-		db.$client,
+		db,
 		withdrawStatements({
 			responseId: row.id,
 			definitionHash: row.definitionHash,
@@ -455,6 +465,6 @@ export async function saveDetached(
 	}
 	// Only while the form is open, asked by the statement: one closed or deleted since it was
 	// read takes no more rows. A row under a deleted form's id would be nobody's to delete.
-	const [stored] = await runBatch(db.$client, [keepApartStatement(row)]);
+	const [stored] = await runBatch(db, [keepApartStatement(row)]);
 	if (!stored) throw new Refusal(404, "There is no such form.");
 }

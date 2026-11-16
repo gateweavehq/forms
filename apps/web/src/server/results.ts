@@ -9,7 +9,7 @@ import {
 	withAnswer,
 } from "@gateweave/forms-schema";
 import { and, eq } from "drizzle-orm";
-import type { Database } from "./db";
+import { type Database, readRows } from "./db";
 import { definition as definitions, detachedAnswer, response } from "./db/schema";
 import { readStored } from "./forms";
 import { definitionOfVersion, type FormRow } from "./owner";
@@ -78,17 +78,16 @@ export async function loadRecords(
 	// answers' primary key.
 	let after: [string, string, string] = ["", "", ""];
 	for (;;) {
-		const { results } = await db.$client
-			.prepare(
-				`SELECT a.response_id, a.question_id, a.item_id, a.value, a.active_ms, a.changes
-				FROM response r JOIN answer a ON a.response_id = r.id
-				WHERE r.form_id = ?1 AND r.definition_hash = ?2
-					AND (a.response_id, a.question_id, a.item_id) > (?3, ?4, ?5)
-				ORDER BY a.response_id, a.question_id, a.item_id
+		const results = await readRows<AnswerRow>(db, {
+			sql: `SELECT answer.response_id, answer.question_id, answer.item_id, answer.value,
+					answer.active_ms, answer.changes
+				FROM response JOIN answer ON answer.response_id = response.id
+				WHERE response.form_id = ?1 AND response.definition_hash = ?2
+					AND (answer.response_id, answer.question_id, answer.item_id) > (?3, ?4, ?5)
+				ORDER BY answer.response_id, answer.question_id, answer.item_id
 				LIMIT ?6`,
-			)
-			.bind(row.id, hash, ...after, PAGE)
-			.all<AnswerRow>();
+			params: [row.id, hash, ...after, PAGE],
+		});
 		for (const found of results) {
 			const own = answers.get(found.response_id);
 			if (own) answers.set(found.response_id, add(own, found));
@@ -126,13 +125,11 @@ export async function loadRecord(
 		.where(eq(definitions.hash, found.definitionHash))
 		.get();
 	if (!stored) throw new Error("A response's definition is missing");
-	const { results } = await db.$client
-		.prepare(
-			`SELECT response_id, question_id, item_id, value, active_ms, changes
+	const results = await readRows<AnswerRow>(db, {
+		sql: `SELECT response_id, question_id, item_id, value, active_ms, changes
 			FROM answer WHERE response_id = ?1`,
-		)
-		.bind(found.id)
-		.all<AnswerRow>();
+		params: [found.id],
+	});
 	return {
 		record: {
 			id: found.id,
