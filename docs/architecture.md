@@ -377,8 +377,11 @@ and the same on every sending. The answer's row keeps the mark of the save that 
 already has that mark and that value: no time added, no change counted, the answer's own
 `updated_at` left alone. A save that writes nothing deletes nothing: the statements that take
 back what a status closed ask the same question, and run before the answer's in the same
-batch, since after it the row has the mark either way. The position is stored as always, and
-the reply is the same `saved`.
+batch, since after it the row has the mark either way. One delete stays after it: the saved
+answer's own row, when its question is one the response no longer asks and rules another (a
+tab left open, a second device). That row is there only once it is written, so it is written
+and taken back in the same batch, sent once or again. The position is stored as always, by the
+batch's last statement, and the reply is the same `saved`.
 
 - **In a header, and never a reason to refuse.** The body of a save is read strictly, and a
   key it does not know is a 400, which the page's queue takes for an answer that cannot be

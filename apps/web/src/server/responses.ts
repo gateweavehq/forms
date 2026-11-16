@@ -339,18 +339,43 @@ export async function saveProgress(
 	// when the row already has this mark and this value, the save was applied before and is
 	// skipped, and a save that writes nothing deletes nothing either. That is why they run
 	// before the upsert, in the same batch: after it, the row has the mark whichever happened.
-	const taken = stale.map(
+	const isSaved = (each: { questionId: string; itemId: string }) =>
+		each.questionId === checked.questionId && each.itemId === checked.itemId;
+	const taken = stale
+		.filter((each) => !isSaved(each))
+		.map(
+			({ questionId, itemId }): Statement => ({
+				sql: `DELETE FROM answer WHERE response_id = ?1 AND question_id = ?2 AND item_id = ?3
+					AND EXISTS (SELECT 1 FROM response WHERE id = ?1 AND completed_at IS NULL)
+					AND (?4 IS NULL OR NOT EXISTS (SELECT 1 FROM answer
+						WHERE response_id = ?1 AND question_id = ?5 AND item_id = ?6
+							AND save_id IS ?4 AND value IS ?7))`,
+				params: [
+					row.id,
+					questionId,
+					itemId,
+					mark,
+					checked.questionId,
+					checked.itemId,
+					checked.value,
+				],
+			}),
+		);
+	// The answer being saved can be one the flow does not ask: its own question is closed (a
+	// tab left open, a second device), and since it rules another it is in its own list. Its
+	// row must not stay, and it is there only once the upsert has run. So this one delete comes
+	// after the upsert, and asks nothing about the mark: sent again, the row is written and
+	// taken back again, and nothing is left either time.
+	const takenBack = stale.filter(isSaved).map(
 		({ questionId, itemId }): Statement => ({
 			sql: `DELETE FROM answer WHERE response_id = ?1 AND question_id = ?2 AND item_id = ?3
-				AND EXISTS (SELECT 1 FROM response WHERE id = ?1 AND completed_at IS NULL)
-				AND (?4 IS NULL OR NOT EXISTS (SELECT 1 FROM answer
-					WHERE response_id = ?1 AND question_id = ?5 AND item_id = ?6
-						AND save_id IS ?4 AND value IS ?7))`,
-			params: [row.id, questionId, itemId, mark, checked.questionId, checked.itemId, checked.value],
+				AND EXISTS (SELECT 1 FROM response WHERE id = ?1 AND completed_at IS NULL)`,
+			params: [row.id, questionId, itemId],
 		}),
 	);
-	// Together or not at all: an answer without its place would resume one step behind.
-	const placed = (await runBatch(db, [...taken, upsert, place])).at(-1);
+	// Together or not at all: an answer without its place would resume one step behind. The
+	// place is the last statement, and its count is what says the response was still open.
+	const placed = (await runBatch(db, [...taken, upsert, ...takenBack, place])).at(-1);
 	if (placed === 0) throw new Refusal(409, "This response is complete.");
 }
 

@@ -325,9 +325,15 @@ describe("saving answers as they are given", () => {
 		const started = await start();
 		const never = answer("made", { option: "never" }, "rye-bread", 300);
 		await marked(started, never, mark("a"));
-		// Stored although the status closes it: a save is not checked against the flow, and
-		// completing would take it back.
-		await marked(started, answer("stopped-why", { options: ["time"] }, "rye-bread"), mark("b"));
+		// A row under the question the status closed, put there as no request can put it (a
+		// save of it is taken back at once): the test is of the resend, which must not touch it.
+		await forms.db
+			.prepare(
+				`INSERT INTO answer (response_id, question_id, item_id, value, active_ms, changes, updated_at)
+				VALUES (?, 'stopped-why', 'rye-bread', '{"options":["time"]}', 1000, 0, 1)`,
+			)
+			.bind(started.id)
+			.run();
 		expect((await marked(started, never, mark("a"))).status).toBe(200);
 		expect((await read(started)).answers.items).toEqual({
 			"rye-bread": {
@@ -341,6 +347,44 @@ describe("saving answers as they are given", () => {
 			"rye-bread": { made: { value: { option: "never" }, activeMs: 600, changes: 0 } },
 		});
 	});
+
+	// A tab left open, or a second device, can send an answer to a question the response no
+	// longer asks. When that question rules another, its own answer is among what the save
+	// takes back: the row is written and deleted in the same batch, and nothing of it stays.
+	it.each([
+		["without a mark", undefined],
+		["with a mark", "b".repeat(32)],
+	])(
+		"does not keep an answer to a question that is closed, sent %s, however often",
+		async (_how, save) => {
+			const started = await start();
+			await marked(started, answer("made", { option: "never" }, "rye-bread", 300), mark("a"));
+			const late = {
+				...answer("stopped-why", { options: ["time"] }, "rye-bread"),
+				position: "q:years",
+			};
+			const send = () =>
+				save === undefined ? progress(started, late) : marked(started, late, save);
+			for (let sending = 0; sending < 2; sending++) {
+				const response = await send();
+				expect(response.status).toBe(200);
+				expect(await response.json()).toEqual({ saved: true });
+				expect(await read(started)).toMatchObject({
+					answers: {
+						items: {
+							"rye-bread": { made: { value: { option: "never" }, activeMs: 300, changes: 0 } },
+						},
+					},
+					// The place is stored all the same, and read from the batch's last statement.
+					position: "q:years",
+				});
+				expect((await read(started)).answers.items["rye-bread"]).not.toHaveProperty("stopped-why");
+			}
+			expect((await rows("answer")).filter((each) => each.response_id === started.id)).toHaveLength(
+				1,
+			);
+		},
+	);
 
 	it("adds a save without a mark each time it arrives, as a page from before the marks expects", async () => {
 		const started = await start();
