@@ -483,7 +483,12 @@ run, with what is Forms' own said below.
   and the reference if the failure has one, which it looks for in the error's causes too. A
   server function's error crosses to the browser as its message alone, so one whose reference
   is in a cause, as Better Auth's `Failed to get session` is, leaves with the reference added
-  to its message (`apps/web/src/start.ts`). The owner's API answers 500 with its own fixed
+  to its message (`apps/web/src/start.ts`). That file also lists the framework's guard on
+  server functions, `createCsrfMiddleware`, as request middleware: a start instance replaces
+  the framework's default request middleware, so without the line a server function would
+  answer a page of another site with the cookie of whoever is signed in. With it, a request
+  that is not from the app's own pages (`Sec-Fetch-Site`, then `Origin`, then `Referer`, and
+  one with none of them) gets 403 before the function runs. The owner's API answers 500 with its own fixed
   sentence. A failing database does not tell a form that exists from one that does not:
   whoever is not its owner fails, or does not, at the same statement for both.
 
