@@ -1,9 +1,8 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { as, authPost, newPerson, signUp } from "./accounts";
 import { type Forms, startForms } from "./forms-worker";
 import { plantForm } from "./made-up";
+import { serverFn as callServerFn } from "./server-fn";
 
 // A query of D1 that failed for good, in the Worker as it deploys. Drizzle's error for it is
 // `Failed query: select … params: …`, with every value the statement was given. A page whose
@@ -380,33 +379,8 @@ describe("signing in and signing up while the database fails", () => {
 // server function, and the failure reaches the page as that function's error, of which only
 // the message crosses.
 describe("a server function whose read failed", () => {
-	const assets = join(resolve(import.meta.dirname, ".."), "dist/server/assets");
-
-	function serverFnUrl(name: string) {
-		const resolver = readdirSync(assets).find((file) =>
-			/^__23tanstack-start-server-fn-resolver-.*\.js$/.test(file),
-		);
-		const source = resolver ? readFileSync(join(assets, resolver), "utf8") : "";
-		const id = new RegExp(
-			`"([0-9a-f]{64})": \\{\\s*functionName: "${name}_createServerFn_handler"`,
-		).exec(source)?.[1];
-		if (!id) throw new Error(`No server function ${name} in the build`);
-		return `/_serverFn/${id}`;
-	}
-
-	/** Calls a GET server function with one string, or with nothing, as the browser does. */
-	function serverFn(name: string, cookie: string, data?: string) {
-		// Seroval's JSON for `{ data }`.
-		const value = data === undefined ? { t: 2, s: 1 } : { t: 1, s: data };
-		const payload = JSON.stringify({
-			t: { t: 10, i: 0, p: { k: ["data"], v: [value] }, o: 0 },
-			f: 0,
-			m: [],
-		});
-		return forms.fetch(`${serverFnUrl(name)}?payload=${encodeURIComponent(payload)}`, {
-			headers: { "x-tsr-serverFn": "true", accept: "application/json", Cookie: cookie },
-		});
-	}
+	const serverFn = (name: string, cookie: string, data?: string) =>
+		callServerFn(forms, name, cookie, data);
 
 	it("answers the owner's page with the reference and nothing of the statement", async () => {
 		const { cookie, id, accountId, token } = await openForm();
