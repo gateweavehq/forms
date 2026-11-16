@@ -13,6 +13,7 @@ import {
 	type ResponseRow,
 	readAnswers,
 	saveDetached,
+	saveMarkOf,
 	saveProgress,
 	withdrawResponse,
 } from "./responses";
@@ -42,6 +43,14 @@ const progressBody = z.strictObject({
 		.optional(),
 	position: z.string().min(1).max(160).optional(),
 });
+
+/**
+ * The header a save's mark travels in. Not the body, which is strict: a Worker from before the
+ * marks would refuse a body with a key it does not know, and the page drops what is refused.
+ * While a deployment rolls out or is rolled back, a page and the Worker that answers it can be
+ * of different versions, and a header the Worker does not know is one it does not read.
+ */
+const SAVE_HEADER = "X-Save";
 
 const detachedBody = z.strictObject({ answers: z.record(z.string().max(64), z.unknown()) });
 
@@ -208,7 +217,9 @@ export function postProgress(request: Request, id: string): Promise<Response> {
 			body.answer.activeMs = Math.min(Math.max(Math.round(activeMs), 0), MAX_ACTIVE_MS);
 		}
 		const db = createDb(env.DB);
-		await saveProgress(db, await definitionOf(db, row), row, body);
+		// A mark that is not one is no mark, and the save is stored as one without: never refused.
+		const save = saveMarkOf(request.headers.get(SAVE_HEADER));
+		await saveProgress(db, await definitionOf(db, row), row, { ...body, save });
 		return json({ saved: true });
 	});
 }

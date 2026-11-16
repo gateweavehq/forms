@@ -336,6 +336,7 @@ things stand in the way of a flood, and a third is planned:
   of the secret, the device class, the position, and when it was created, updated and completed.
 - `answer`: one row per response, question and item, with the value as JSON, the active time and
   the number of changes. The server counts a change in the statement that writes the answer.
+  `save_id` is the mark of the save that last wrote the row (see below).
 - `detached_answer`: a random key, the form id and the answers. Nothing else.
 - `form`: id, the owning account, title, state, the hash of the definition new responses start
   under, and when it was created and updated.
@@ -365,6 +366,64 @@ moment, so changing the answer back asks the follow-up again, empty. Completion 
 rule once more, for a row that got past it. Deleting was chosen over marking because a mark is
 something every export and count would have to remember. The rule is one function,
 `reachedAnswers` in `packages/schema`, used by the server, the page and the results.
+
+**A save that arrives twice is stored once, its time included.** The page's queue sends a save
+again when no reply came, and the database may have committed it all the same: a 500 after
+the commit, a connection dropped on the way back. The page cannot tell the two apart, so the
+server does. The queue gives each save of an answer a mark when it is given (`saveMark`,
+`lib/client.ts`: 16 random bytes, as 32 hex characters), sent in the request's `X-Save` header
+and the same on every sending. The answer's row keeps the mark of the save that last wrote it
+(`answer.save_id`), and the statement that writes the answer changes nothing when the row
+already has that mark and that value: no time added, no change counted, the answer's own
+`updated_at` left alone. A save that writes nothing deletes nothing: the statements that take
+back what a status closed ask the same question, and run before the answer's in the same
+batch, since after it the row has the mark either way. One delete stays after it: the saved
+answer's own row, when its question is one the response no longer asks and rules another (a
+tab left open, a second device). That row is there only once it is written, so it is written
+and taken back in the same batch, sent once or again. The position is stored as always, by the
+batch's last statement, and the reply is the same `saved`.
+
+- **In a header, and never a reason to refuse.** The body of a save is read strictly, and a
+  key it does not know is a 400, which the page's queue takes for an answer that cannot be
+  stored, and drops. A page and the Worker that answers it are of different versions while a
+  deployment rolls out, and after one is rolled back with a page still open; a mark in the
+  body would have had every answer of such a page refused. A header a Worker does not know is
+  one it does not read, so the body stays what every version takes
+  (`lib/client.test.ts` holds a new page's body against the rule as it was before the marks).
+  For the same reason a mark that is not exactly 32 hex characters is no mark, and the save
+  is stored as one without. The failure has one direction: a time counted twice, never an
+  answer lost. The address is the app's own, so no other origin is asked to allow the header,
+  and the replies are `no-store`.
+
+- **Random, not a count.** A number that only grows would have to be agreed between the
+  devices a response is open on, each of which would count for itself, and found again by a
+  page that is loaded anew; a time would trust the device's clock. A random mark needs nothing
+  kept in the browser and nothing asked of the server, and holds nothing about the device.
+- **A page loaded again repeats nothing.** The queue is in memory: what was waiting is gone
+  with the page (lost, as before), and the page that follows reads the response from the
+  server and marks its own saves anew.
+- **A request without a mark is added as it always was**: a page loaded before this existed
+  keeps working, and keeps the old behaviour, until it is loaded again. A row written before
+  the column existed has no mark, so the first marked save of that answer is applied, and
+  recognised from then on.
+- **What it does not catch.** The row keeps one mark, the last. Two devices on the same card,
+  where one's save is stored and its reply lost, the other's save of the same answer arrives
+  next, and only then the first is sent again: that resend is taken for a new save, adds its
+  time a second time and puts its answer back. It needs two devices on one question within
+  the seconds a retry takes. Keeping every mark would catch it, at the price of a row per
+  save.
+- **A mark with another answer is a save like any other.** No page of ours sends a mark a
+  second time with a different value (the queue marks a save once and never changes it). A
+  request that does is stored, counted and takes back what it closes, as a save without a
+  mark would: it is answered `saved`, so it has to be, and only a save whose mark and value
+  the row both has is taken for one applied before.
+- **The other writes.** Completing twice changes nothing: the second finds the response
+  complete and answers as the first did. Withdrawing twice deletes and counts once; the
+  second request gets the 404 of a response that is not there, since nothing is kept that
+  could say it was just withdrawn, and the page then says the server would not do it although
+  it did. A kept-apart answer sent twice (the person presses "send" again after a reply that
+  never came) is stored as two rows: the row has nothing to recognise a resend by, on
+  purpose, and giving it something is a decision about that table, not made here.
 
 A definition is stored as one row and may weigh at most 1 MB (D1 takes no row above 2 MB); a
 larger one is refused before anything is stored. One nested more than 32 levels deep is
@@ -450,9 +509,11 @@ run, with what is Forms' own said below.
   exists (so `const { DB } = env` fails too), and on a Drizzle database made elsewhere. Code
   that hides one of those behind another spelling gets past it, and a review has to catch it.
 - **The log has what the error leaves out**, once per failure: `d1: a query failed (<kind>),
-  reference <reference>: <statement>`. The statement is the text with its `?`, cut at 600
+  reference <reference>: <statement>`. The statement is the text with its `?`, cut at 2,000
   characters, never the values, on the two grounds above. A batch written by hand logs all its
-  statements; a batch of Drizzle's logs none.
+  statements, each cut by itself, so that a long one does not hide those after it; a batch of
+  Drizzle's logs none. The cut keeps a line a line and protects nothing: a text holds no
+  value at any length, and no statement is written to fit under it.
   The kind is D1's code at the start of its words, SQLite's at their end, a name for each thing
   D1 says in fixed words (the passing ones of `retry-reads.ts`, and `overloaded`,
   `queued-too-long`, `queue-full`, `cpu-reset`, `memory-reset`, `storage-timeout`,
@@ -474,10 +535,10 @@ run, with what is Forms' own said below.
   name. The page's queue (`lib/save-queue.ts`) keeps an answer that got a 500 and sends it
   again, and the page says meanwhile that saving is failing; only a refusal (a 4xx) is dropped
   and said. A save is one batch, so an answer that failed is not half stored. A save whose
-  batch the database did commit, with only the reply lost, is sent again like any other: it
-  leaves one row and counts no change (`changes`), because the value is the same, but the time
-  the question was on screen (`active_ms`) is added a second time. That is older than this
-  code and not changed by it. The queue is in the page's memory: an answer still waiting when
+  batch the database did commit, with only the reply lost, is sent again like any other, and
+  is recognised by its mark: one row, no change counted, and the time the question was on
+  screen (`active_ms`) added once ("A save that arrives twice is stored once", under Storage).
+  The queue is in the page's memory: an answer still waiting when
   the tab is closed during an outage is lost, as it was before.
 - **A page shows no error's message.** `RouteError` says that the page could not be loaded,
   and the reference if the failure has one, which it looks for in the error's causes too. A

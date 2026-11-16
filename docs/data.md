@@ -21,11 +21,11 @@ Everything the app stores is in one D1 database. It uses no KV, no R2 and no Dur
 
 ### About a respondent
 
-| Table             | Holds                                                                                                                                                                                    |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `response`        | A random id, the form, the version of the definition it began under, a seal of its secret, the device class, the card the person is on, and when it was begun, last changed and finished |
-| `answer`          | One row per answer: the response, the question, the item, the value, how long the question was on screen in a visible tab, how often the answer was replaced, and when it last changed   |
-| `detached_answer` | What a form keeps apart, such as an address for the results: a random key, the form, and the answers. No response, no time                                                               |
+| Table             | Holds                                                                                                                                                                                                                                                                                                                                                |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `response`        | A random id, the form, the version of the definition it began under, a seal of its secret, the device class, the card the person is on, and when it was begun, last changed and finished                                                                                                                                                             |
+| `answer`          | One row per answer: the response, the question, the item, the value, how long the question was on screen in a visible tab, how often the answer was replaced, when it last changed, and a random mark of the save that last wrote it, made by the page so that a save sent twice counts once; it is made from nothing about the person or the device |
+| `detached_answer` | What a form keeps apart, such as an address for the results: a random key, the form, and the answers. No response, no time                                                                                                                                                                                                                           |
 
 Not stored, in any table or log: a name (unless a question asks for one), a network address, a
 user agent, a cookie. The device class is `phone`, `tablet` or `desk`, from the window's width
@@ -68,7 +68,7 @@ agent; the columns exist and are left empty.
   error code and, where it names one, a table, a column or a constraint of the schema. The
   reference is eight random characters, which the error page shows, so that a person's report
   finds the line. The statement is the SQL as it was sent, with a `?` wherever a value was,
-  cut at 600 characters. No value is in it: no answer, no kept-apart answer, no response's id
+  cut at 2,000 characters (each statement of a batch by itself). No value is in it: no answer, no kept-apart answer, no response's id
   or seal, no email address, no session token, and nothing the database itself said in other
   words. A read that failed for a moment and was sent again leaves
   `d1: a read failed (<name>) and is sent again (attempt N)`, which holds less. Better Auth

@@ -218,6 +218,21 @@ function checkAnswer(
 	return { questionId: question.id, itemId, value: storedValue(question, parsed.data) };
 }
 
+/**
+ * A save's mark, exactly as the page makes it: 16 random bytes in hex. It is the same when the
+ * page sends the save again because no reply came, and another for the next save.
+ */
+const SAVE_MARK = /^[0-9a-f]{32}$/;
+
+/**
+ * The mark a request came with, or none. Anything that is not a mark is none, and is never a
+ * reason to refuse: a save without a mark is stored as saves always were, so the worst a bad
+ * mark can do is let a time count twice. Refusing would lose the answer.
+ */
+export function saveMarkOf(given: string | null | undefined): string | undefined {
+	return given != null && SAVE_MARK.test(given) ? given : undefined;
+}
+
 /** A step's key, as the flow writes them. Stored as given: only the browser reads it back. */
 const POSITION = /^[sqif]:[a-z0-9_:-]{1,140}$/;
 
@@ -225,12 +240,24 @@ const POSITION = /^[sqif]:[a-z0-9_:-]{1,140}$/;
  * Stores an answer as it is given, and where the person is now. The time adds up over visits,
  * and a change is counted when an answer that was there is replaced by a different one. The
  * server counts: what a browser says about its own changes is not evidence.
+ *
+ * A save can arrive twice: the database commits it, the reply is lost, and the page, which
+ * cannot tell that from a save that failed, sends it again. So the page marks each save
+ * (`save`), and the answer's row keeps the mark of the save that last wrote it. A save whose
+ * mark and value the row already has was applied: it writes nothing, deletes nothing, and is
+ * answered as it was the first time. Anything else is a save like any other: one without a
+ * mark, from a page older than the marks, and one whose mark the row has with another value,
+ * which no page of ours sends and which must not be answered "saved" without being stored.
  */
 export async function saveProgress(
 	db: Database,
 	definition: Definition,
 	row: ResponseRow,
-	progress: { answer?: IncomingAnswer | undefined; position?: string | undefined },
+	progress: {
+		answer?: IncomingAnswer | undefined;
+		position?: string | undefined;
+		save?: string | undefined;
+	},
 ): Promise<void> {
 	if (row.completedAt !== null) throw new Refusal(409, "This response is complete.");
 	if (progress.position !== undefined && !POSITION.test(progress.position)) {
@@ -276,15 +303,23 @@ export async function saveProgress(
 	// SQLite evaluates every right-hand side of the update against the row as it was.
 	// The answer is a value of the statement (`?4`), never part of its text: the text is what a
 	// failure logs.
+	// The update's own WHERE is what recognises a save that was applied before: the row has its
+	// mark and its value already, so nothing of the row changes, its time least of all. A row
+	// with no mark (written before the column, or by an older page) and a save with none never
+	// match, and neither does a mark that comes with another value.
+	const mark = progress.save ?? null;
 	const upsert: Statement = {
-		sql: `INSERT INTO answer (response_id, question_id, item_id, value, active_ms, changes, updated_at)
-			SELECT ?1, ?2, ?3, ?4, ?5, 0, ?6
+		sql: `INSERT INTO answer (response_id, question_id, item_id, value, active_ms, changes, updated_at, save_id)
+			SELECT ?1, ?2, ?3, ?4, ?5, 0, ?6, ?7
 			WHERE EXISTS (SELECT 1 FROM response WHERE id = ?1 AND completed_at IS NULL)
 			ON CONFLICT (response_id, question_id, item_id) DO UPDATE SET
 				changes = answer.changes + (CASE WHEN answer.value IS NOT NULL AND answer.value IS NOT excluded.value THEN 1 ELSE 0 END),
 				value = excluded.value,
 				active_ms = answer.active_ms + excluded.active_ms,
-				updated_at = excluded.updated_at`,
+				updated_at = excluded.updated_at,
+				save_id = excluded.save_id
+			WHERE excluded.save_id IS NULL OR answer.save_id IS NOT excluded.save_id
+				OR answer.value IS NOT excluded.value`,
 		params: [
 			row.id,
 			checked.questionId,
@@ -292,6 +327,7 @@ export async function saveProgress(
 			checked.value,
 			progress.answer.activeMs,
 			now,
+			mark,
 		],
 	};
 	const place: Statement = {
@@ -299,15 +335,47 @@ export async function saveProgress(
 			WHERE id = ?1 AND completed_at IS NULL`,
 		params: [row.id, now, progress.position ?? null],
 	};
-	const taken = stale.map(
+	// What the answer closes goes only with the answer. Each of these asks what the upsert asks:
+	// when the row already has this mark and this value, the save was applied before and is
+	// skipped, and a save that writes nothing deletes nothing either. That is why they run
+	// before the upsert, in the same batch: after it, the row has the mark whichever happened.
+	const isSaved = (each: { questionId: string; itemId: string }) =>
+		each.questionId === checked.questionId && each.itemId === checked.itemId;
+	const taken = stale
+		.filter((each) => !isSaved(each))
+		.map(
+			({ questionId, itemId }): Statement => ({
+				sql: `DELETE FROM answer WHERE response_id = ?1 AND question_id = ?2 AND item_id = ?3
+					AND EXISTS (SELECT 1 FROM response WHERE id = ?1 AND completed_at IS NULL)
+					AND (?4 IS NULL OR NOT EXISTS (SELECT 1 FROM answer
+						WHERE response_id = ?1 AND question_id = ?5 AND item_id = ?6
+							AND save_id IS ?4 AND value IS ?7))`,
+				params: [
+					row.id,
+					questionId,
+					itemId,
+					mark,
+					checked.questionId,
+					checked.itemId,
+					checked.value,
+				],
+			}),
+		);
+	// The answer being saved can be one the flow does not ask: its own question is closed (a
+	// tab left open, a second device), and since it rules another it is in its own list. Its
+	// row must not stay, and it is there only once the upsert has run. So this one delete comes
+	// after the upsert, and asks nothing about the mark: sent again, the row is written and
+	// taken back again, and nothing is left either time.
+	const takenBack = stale.filter(isSaved).map(
 		({ questionId, itemId }): Statement => ({
 			sql: `DELETE FROM answer WHERE response_id = ?1 AND question_id = ?2 AND item_id = ?3
 				AND EXISTS (SELECT 1 FROM response WHERE id = ?1 AND completed_at IS NULL)`,
 			params: [row.id, questionId, itemId],
 		}),
 	);
-	// Together or not at all: an answer without its place would resume one step behind.
-	const [, placed] = await runBatch(db, [upsert, place, ...taken]);
+	// Together or not at all: an answer without its place would resume one step behind. The
+	// place is the last statement, and its count is what says the response was still open.
+	const placed = (await runBatch(db, [...taken, upsert, ...takenBack, place])).at(-1);
 	if (placed === 0) throw new Refusal(409, "This response is complete.");
 }
 

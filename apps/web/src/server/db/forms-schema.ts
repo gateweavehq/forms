@@ -103,6 +103,14 @@ export const answer = sqliteTable(
 		/** How often an answer already given was replaced by a different one. */
 		changes: integer("changes").notNull().default(0),
 		updatedAt: integer("updated_at").notNull(),
+		/**
+		 * The mark of the save that last wrote this row: a random code the page made for that one
+		 * save, and sends again with it when no reply came. A save that arrives with the mark the
+		 * row already has was applied before, so its time is not added again. Null for a row
+		 * written before the column existed, or last written by a page that sends no mark. The
+		 * next save replaces it, and it is made from nothing about the person or their device.
+		 */
+		saveId: text("save_id"),
 	},
 	(table) => [
 		primaryKey({ columns: [table.responseId, table.questionId, table.itemId] }),

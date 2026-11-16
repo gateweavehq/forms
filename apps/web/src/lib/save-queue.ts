@@ -1,4 +1,4 @@
-import { type Progress, RequestFailed } from "./client";
+import { type Progress, RequestFailed, saveMark } from "./client";
 
 /** How long to wait before sending again after a failure, growing up to half a minute. */
 const RETRY_DELAYS = [1_000, 2_000, 5_000, 10_000, 30_000];
@@ -33,9 +33,14 @@ export class SaveQueue {
 		this.#onRefused = onRefused;
 	}
 
-	/** Adds something to send, after everything already waiting. */
+	/**
+	 * Adds something to send, after everything already waiting. An answer is marked here, once,
+	 * so that every sending of it carries the same mark: the server may have stored it although
+	 * its reply never came, and must be able to tell this save from the next one of the same
+	 * answer. A note of where the person is needs none: storing it twice changes nothing.
+	 */
 	push(progress: Progress): void {
-		this.#waiting.push(progress);
+		this.#waiting.push(progress.answer ? { ...progress, save: saveMark() } : progress);
 		void this.#drain();
 	}
 

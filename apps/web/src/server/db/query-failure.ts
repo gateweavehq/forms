@@ -97,8 +97,13 @@ function newReference(): string {
 	return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-/** How much of a statement is logged. The longest the app sends are a few hundred characters. */
-const STATEMENT_LENGTH = 600;
+/**
+ * How much of a statement is logged. The longest the app writes are well under this; what goes
+ * over is a list of placeholders. Each statement of a batch is cut by itself, so that a long
+ * one does not hide the ones after it. A text holds no values, so a longer one tells no more
+ * about anyone: the cut only keeps a line of the log a line.
+ */
+const STATEMENT_LENGTH = 2_000;
 
 /**
  * Makes the error for what D1 said, and logs it once, with the statement if there was one: the
@@ -107,11 +112,15 @@ const STATEMENT_LENGTH = 600;
  * placeholders, SQL and the schema's names (`hand-written.ts`). `sql.raw` would break this, and
  * only a test that reads the source looks for it.
  */
-function failed(cause: unknown, statement?: string): DatabaseError {
+function failed(cause: unknown, statements: readonly string[] = []): DatabaseError {
 	const error = new DatabaseError(kindOf(cause), newReference());
-	const text = statement?.replace(/\s+/g, " ").trim();
-	const shown =
-		text && text.length > STATEMENT_LENGTH ? `${text.slice(0, STATEMENT_LENGTH)}…` : text;
+	const shown = statements
+		.map((statement) => {
+			const text = statement.replace(/\s+/g, " ").trim();
+			return text.length > STATEMENT_LENGTH ? `${text.slice(0, STATEMENT_LENGTH)}…` : text;
+		})
+		.filter(Boolean)
+		.join("; ");
 	console.error(
 		`d1: a query failed (${error.kind}), reference ${error.reference}${shown ? `: ${shown}` : ""}`,
 	);
@@ -134,7 +143,7 @@ export async function handWritten<Answer>(
 	try {
 		return await send();
 	} catch (error) {
-		throw failed(error, texts.join("; "));
+		throw failed(error, texts);
 	}
 }
 
@@ -208,7 +217,7 @@ export function withoutStatements<Db extends object>(db: Db): Db {
 				} catch (error) {
 					// `all` and `get` may go through `values`, which has made the error by then.
 					if (!isQueryError(error)) throw error;
-					throw failed(error.cause, typeof error.query === "string" ? error.query : undefined);
+					throw failed(error.cause, typeof error.query === "string" ? [error.query] : []);
 				}
 			};
 		}
