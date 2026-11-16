@@ -34,6 +34,10 @@ import { READ_ATTEMPTS } from "./retry-reads";
 // `../forms` reads its settings from the Worker's runtime, which is not here.
 vi.mock("cloudflare:workers", () => ({ env: {} }));
 
+// A sign-up through Better Auth hashes a password, which takes over a second when nothing else
+// runs and several beside the other suites, each with a local runtime of its own.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 60_000 });
+
 let real: D1Database;
 let dispose: () => Promise<void>;
 
