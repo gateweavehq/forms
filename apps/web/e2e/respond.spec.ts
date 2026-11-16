@@ -730,6 +730,45 @@ test("tells the person when the server would not take an answer", async ({ page 
 	expect((await stored(page)).answers.questions).not.toHaveProperty("often");
 });
 
+test("counts an answer's time once when the server stored it and the reply was lost", async ({
+	page,
+}) => {
+	await start(page);
+	await forward(page);
+	// The first answer reaches the server, which stores it, and the page is told 500 instead:
+	// what a reply lost on the way back is to the page. Everything after goes through.
+	const sent: Array<{ save?: string; answer?: { activeMs: number } }> = [];
+	let lost = false;
+	await page.route("**/api/responses/*/progress", async (route) => {
+		const body = route.request().postDataJSON() as (typeof sent)[number];
+		if (!body.answer) return route.continue();
+		sent.push(body);
+		if (lost) return route.continue();
+		lost = true;
+		await route.fetch();
+		await route.fulfill({ status: 500, json: { error: "Something went wrong on our side." } });
+	});
+	// Long enough on the card that a time counted twice could not pass for one counted once.
+	await page.waitForTimeout(400);
+	await choose(page, "Most weeks");
+	await forward(page);
+	await expect(heading(page, "For how many years have you baked bread at home?")).toBeVisible();
+
+	// The page's queue sends it again by itself, the same save with the same mark.
+	await expect.poll(() => sent.length, { timeout: 15_000 }).toBe(2);
+	expect(sent[0]?.save).toMatch(/^[0-9a-f]{32}$/);
+	expect(sent[1]).toEqual(sent[0]);
+	const once = sent[0]?.answer?.activeMs ?? 0;
+	expect(once).toBeGreaterThanOrEqual(400);
+	await expect.poll(async () => (await stored(page)).position).toBe("q:years");
+	expect((await stored(page)).answers.questions.often).toEqual({
+		value: { option: "weekly" },
+		activeMs: once,
+		changes: 0,
+	});
+	await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
 test("lets a single choice and a grid's row go back to no answer", async ({ page }) => {
 	await start(page);
 	await forward(page);

@@ -425,6 +425,8 @@ export const strings = {
 				activeMs: "How long the question was on your screen while the page was visible.",
 				changes: "How often you replaced the answer with a different one.",
 				updatedAt: "When you gave the answer or last changed it.",
+				saveId:
+					"A random code your browser made for the last time this answer was saved, so that an answer sent twice over a poor connection is counted once. It is replaced each time, and it identifies neither you nor your device.",
 			},
 			detachedAnswer: {
 				id: "A random number. It is not a count, so it does not say in which order rows arrived.",

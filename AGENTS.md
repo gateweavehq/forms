@@ -57,7 +57,10 @@ silently.
    `ANSWERS_VERSION`. Ids are what answers are stored under: never derive behaviour from wording.
 2. **The server decides.** Every answer is checked against the definition in
    `apps/web/src/server/responses.ts` before it is stored, and the server counts changes itself.
-   What the browser checks is for the person's benefit only.
+   What the browser checks is for the person's benefit only. The page's queue sends a save
+   again when no reply came, so a save applies once: the queue marks it (`save`), the
+   statement that writes the answer keeps the mark on the row (`answer.save_id`) and changes
+   nothing for a mark the row already has. A request without a mark is added as before.
 3. **A response's secret stays out of every address and log.** It lives in the fragment of the
    page's address and in the `Authorization` header. The database keeps a seal of it
    (`server/secret.ts`), checked with `crypto.subtle.verify`. Never put it in a path, a query, a
@@ -193,7 +196,8 @@ silently.
   and run it in workerd through Miniflare, with a migrated D1 database and no network; see
   `test/forms-worker.ts`. To see what a failing database does, the unit tests in
   `src/server/db/` put a failure in front of a real local D1 (`faulty-d1.ts`: the next
-  statement or the next batch is refused with words of the test's choosing), and the Worker
+  statement or the next batch is refused with words of the test's choosing, or the next batch
+  is committed and then fails, as when its reply is lost), and the Worker
   tests rename a table for the length of one request (`test/query-failure.test.ts`).
 - `apps/web/e2e` has the browser tests: Playwright drives Chromium against the production build
   (`vite preview`, port 4771, its own empty local database), once at 390 by 844 with touch and

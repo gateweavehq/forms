@@ -10,9 +10,14 @@ export const LOCAL =
 
 /**
  * A local D1 with the app's migrations applied, or without them, as a deployment's is before its
- * first migration. Dispose of it after the tests.
+ * first migration. With `before`, only the migrations that come before that file are applied,
+ * as on a deployment that has not had it yet, and `migrateRest` applies it and those after it.
+ * Dispose of it after the tests.
  */
-export async function migratedD1(name: string, { migrate = true } = {}) {
+export async function migratedD1(
+	name: string,
+	{ migrate = true, before }: { migrate?: boolean; before?: string } = {},
+) {
 	const mf = new Miniflare(
 		convertV4MiniflareOptions({
 			modules: true,
@@ -21,32 +26,41 @@ export async function migratedD1(name: string, { migrate = true } = {}) {
 		}),
 	);
 	const d1 = (await mf.getD1Database("DB")) as unknown as D1Database;
-	if (!migrate) return { d1, dispose: () => mf.dispose() };
 	const migrations = resolve(import.meta.dirname, "../../../migrations");
-	for (const file of readdirSync(migrations)
-		.filter((each) => each.endsWith(".sql"))
-		.sort()) {
-		const statements = readFileSync(join(migrations, file), "utf8")
-			.split("--> statement-breakpoint")
-			.map((statement) => statement.trim())
-			.filter(Boolean);
-		await d1.batch(statements.map((statement) => d1.prepare(statement)));
-	}
-	return { d1, dispose: () => mf.dispose() };
+	const files = migrate
+		? readdirSync(migrations)
+				.filter((each) => each.endsWith(".sql"))
+				.sort()
+		: [];
+	const apply = async (some: string[]) => {
+		for (const file of some) {
+			const statements = readFileSync(join(migrations, file), "utf8")
+				.split("--> statement-breakpoint")
+				.map((statement) => statement.trim())
+				.filter(Boolean);
+			await d1.batch(statements.map((statement) => d1.prepare(statement)));
+		}
+	};
+	const held = before === undefined ? [] : files.filter((file) => file >= before);
+	await apply(files.filter((file) => !held.includes(file)));
+	return { d1, dispose: () => mf.dispose(), migrateRest: () => apply(held) };
 }
 
 /**
  * The database, failing when told to: the next `failures` statements sent alone are refused with
  * `message`, before they reach the database, and so are the next `batchFailures` batches, which
- * is how most of what Forms writes is sent. `sent` lists every statement that was tried alone,
- * refused or not, and `batches` every batch, by its statements. `beforeBatch` runs once, before
- * the next batch reaches the database: the other request that got there first. A session it
- * opens fails the same way.
+ * is how most of what Forms writes is sent. The next `batchLosses` batches fail the other way:
+ * they reach the database, which commits them, and then fail with `message`, as when the reply
+ * is lost on its way back. `sent` lists every statement that was tried alone, refused or not,
+ * and `batches` every batch, by its statements. `beforeBatch` runs once, before the next batch
+ * reaches the database: the other request that got there first. A session it opens fails the
+ * same way.
  */
 export function faulty(d1: D1Database) {
 	const state = {
 		failures: 0,
 		batchFailures: 0,
+		batchLosses: 0,
 		message: LOCAL,
 		sent: [] as string[],
 		batches: [] as string[][],
@@ -96,7 +110,14 @@ export function faulty(d1: D1Database) {
 						const first = state.beforeBatch;
 						state.beforeBatch = undefined;
 						await first?.();
-						return target.batch(statements.map((statement) => made.get(statement) ?? statement));
+						const done = await target.batch(
+							statements.map((statement) => made.get(statement) ?? statement),
+						);
+						if (state.batchLosses > 0) {
+							state.batchLosses -= 1;
+							throw new Error(state.message);
+						}
+						return done;
 					};
 				}
 				if (key === "withSession") {

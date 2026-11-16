@@ -130,6 +130,39 @@ describe("the save queue", () => {
 		expect(failing).toEqual([true, true, false]);
 	});
 
+	// The server may have stored an answer whose reply never came. It tells such a save from the
+	// next one of the same answer by the save's mark, so the mark must not change on the way.
+	it("marks each answer once: the same mark however often it is sent, another for the next", async () => {
+		const sent: Progress[] = [];
+		let down = true;
+		const queue = new SaveQueue(
+			async (progress) => {
+				sent.push(progress);
+				if (down) throw new RequestFailed(500);
+			},
+			() => {},
+			() => {},
+		);
+		const answer = { question: "drink", value: { option: "yes" }, activeMs: 900 };
+		queue.push({ answer, position: "q:why" });
+		queue.push({ answer });
+		queue.push({ position: "q:end" });
+		await vi.advanceTimersByTimeAsync(1_000);
+		down = false;
+		await vi.advanceTimersByTimeAsync(2_000);
+		await queue.settled();
+
+		const [first, again, third, next, place] = sent;
+		expect(sent).toHaveLength(5);
+		expect(first?.save).toMatch(/^[0-9a-f]{32}$/);
+		expect([again, third]).toEqual([first, first]);
+		// The same answer given again is another save.
+		expect(next?.save).toMatch(/^[0-9a-f]{32}$/);
+		expect(next?.save).not.toBe(first?.save);
+		// Where the person is can be stored twice without harm, and has no mark.
+		expect(place).toEqual({ position: "q:end" });
+	});
+
 	it("is settled at once when nothing is waiting", async () => {
 		const queue = new SaveQueue(
 			server().send,

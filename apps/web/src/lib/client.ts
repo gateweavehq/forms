@@ -37,6 +37,23 @@ export interface Progress {
 		activeMs: number;
 	};
 	position?: string;
+	/**
+	 * The mark of this save, which the queue gives it (`saveMark`): the same however often it is
+	 * sent, so that the server adds an answer's time once when a reply was lost on the way back.
+	 */
+	save?: string;
+}
+
+/**
+ * A mark for one save of an answer: 16 random bytes, as text. Random and not a count, because
+ * a count would have to be agreed: the same response can be open on two devices, each
+ * counting for itself, and a page that is loaded again would have to find out where the last
+ * one stopped. Not a time either: a device's clock can be wrong, or the same as another's. A
+ * random mark needs nothing kept and nothing asked, and says nothing about the device.
+ */
+export function saveMark(): string {
+	const bytes = crypto.getRandomValues(new Uint8Array(16));
+	return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 async function send(path: string, init: RequestInit): Promise<unknown> {

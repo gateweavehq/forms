@@ -218,6 +218,13 @@ function checkAnswer(
 	return { questionId: question.id, itemId, value: storedValue(question, parsed.data) };
 }
 
+/**
+ * A save's mark, as the page makes it: random, the same when the page sends the save again
+ * because no reply came, and another for the next save. Only its shape is checked: it is
+ * compared with what the answer's row holds and nothing else.
+ */
+export const SAVE_MARK = /^[A-Za-z0-9_-]{16,64}$/;
+
 /** A step's key, as the flow writes them. Stored as given: only the browser reads it back. */
 const POSITION = /^[sqif]:[a-z0-9_:-]{1,140}$/;
 
@@ -225,12 +232,24 @@ const POSITION = /^[sqif]:[a-z0-9_:-]{1,140}$/;
  * Stores an answer as it is given, and where the person is now. The time adds up over visits,
  * and a change is counted when an answer that was there is replaced by a different one. The
  * server counts: what a browser says about its own changes is not evidence.
+ *
+ * A save can arrive twice: the database commits it, the reply is lost, and the page, which
+ * cannot tell that from a save that failed, sends it again. So the page marks each save
+ * (`save`), and the answer's row keeps the mark of the save that last wrote it. A save whose
+ * mark the row already has was applied: it adds no time and counts no change, and is answered
+ * as it was the first time. A mark names one save, so what arrives under it a second time is
+ * not read again. A save without a mark, from a page older than the marks, is added as it
+ * always was.
  */
 export async function saveProgress(
 	db: Database,
 	definition: Definition,
 	row: ResponseRow,
-	progress: { answer?: IncomingAnswer | undefined; position?: string | undefined },
+	progress: {
+		answer?: IncomingAnswer | undefined;
+		position?: string | undefined;
+		save?: string | undefined;
+	},
 ): Promise<void> {
 	if (row.completedAt !== null) throw new Refusal(409, "This response is complete.");
 	if (progress.position !== undefined && !POSITION.test(progress.position)) {
@@ -276,15 +295,23 @@ export async function saveProgress(
 	// SQLite evaluates every right-hand side of the update against the row as it was.
 	// The answer is a value of the statement (`?4`), never part of its text: the text is what a
 	// failure logs.
+	// The update's own WHERE is what recognises a save that was applied before: the row has its
+	// mark already, so nothing of the row changes, its time least of all. A row with no mark
+	// (written before the column, or by an older page) and a save with none never match.
+	// The mark is written as `?7`, not `excluded.save_id`, to keep the text short: a failure
+	// logs the batch's text cut at 600 characters, and the statement after this one should
+	// still be seen to begin there.
 	const upsert: Statement = {
-		sql: `INSERT INTO answer (response_id, question_id, item_id, value, active_ms, changes, updated_at)
-			SELECT ?1, ?2, ?3, ?4, ?5, 0, ?6
+		sql: `INSERT INTO answer (response_id, question_id, item_id, value, active_ms, changes, updated_at, save_id)
+			SELECT ?1, ?2, ?3, ?4, ?5, 0, ?6, ?7
 			WHERE EXISTS (SELECT 1 FROM response WHERE id = ?1 AND completed_at IS NULL)
 			ON CONFLICT (response_id, question_id, item_id) DO UPDATE SET
 				changes = answer.changes + (CASE WHEN answer.value IS NOT NULL AND answer.value IS NOT excluded.value THEN 1 ELSE 0 END),
 				value = excluded.value,
 				active_ms = answer.active_ms + excluded.active_ms,
-				updated_at = excluded.updated_at`,
+				updated_at = excluded.updated_at,
+				save_id = ?7
+			WHERE ?7 IS NULL OR answer.save_id IS NOT ?7`,
 		params: [
 			row.id,
 			checked.questionId,
@@ -292,6 +319,7 @@ export async function saveProgress(
 			checked.value,
 			progress.answer.activeMs,
 			now,
+			progress.save ?? null,
 		],
 	};
 	const place: Statement = {

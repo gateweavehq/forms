@@ -21,11 +21,11 @@ Everything the app stores is in one D1 database. It uses no KV, no R2 and no Dur
 
 ### About a respondent
 
-| Table             | Holds                                                                                                                                                                                    |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `response`        | A random id, the form, the version of the definition it began under, a seal of its secret, the device class, the card the person is on, and when it was begun, last changed and finished |
-| `answer`          | One row per answer: the response, the question, the item, the value, how long the question was on screen in a visible tab, how often the answer was replaced, and when it last changed   |
-| `detached_answer` | What a form keeps apart, such as an address for the results: a random key, the form, and the answers. No response, no time                                                               |
+| Table             | Holds                                                                                                                                                                                                                                                                                                                                                |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `response`        | A random id, the form, the version of the definition it began under, a seal of its secret, the device class, the card the person is on, and when it was begun, last changed and finished                                                                                                                                                             |
+| `answer`          | One row per answer: the response, the question, the item, the value, how long the question was on screen in a visible tab, how often the answer was replaced, when it last changed, and a random mark of the save that last wrote it, made by the page so that a save sent twice counts once; it is made from nothing about the person or the device |
+| `detached_answer` | What a form keeps apart, such as an address for the results: a random key, the form, and the answers. No response, no time                                                                                                                                                                                                                           |
 
 Not stored, in any table or log: a name (unless a question asks for one), a network address, a
 user agent, a cookie. The device class is `phone`, `tablet` or `desk`, from the window's width

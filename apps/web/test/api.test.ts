@@ -223,6 +223,115 @@ describe("saving answers as they are given", () => {
 		]);
 	});
 
+	// The page sends a save again when no reply came, and the save may have been stored. Two
+	// requests with the same body are what that is to the server. (That the page's queue sends
+	// the same mark again, and what the database then does when it had committed the first, is
+	// tested with the queue itself in `src/server/resent-save.test.ts`.)
+	it("stores a save that arrives twice with the same mark once: its time, its change and its answer", async () => {
+		const started = await start();
+		const mark = (name: string) => name.padEnd(22, "-");
+		const twice = async (body: Record<string, unknown>) => {
+			const statuses: number[] = [];
+			const replies: unknown[] = [];
+			for (let sending = 0; sending < 2; sending++) {
+				const response = await progress(started, body);
+				statuses.push(response.status);
+				replies.push(await response.json());
+			}
+			// Answered the second time as the first, so that the page's queue lets go of it.
+			expect(statuses).toEqual([200, 200]);
+			expect(replies).toEqual([{ saved: true }, { saved: true }]);
+		};
+		await twice({ ...answer("often", { option: "weekly" }, undefined, 900), save: mark("one") });
+		expect((await read(started)).answers.questions.often).toEqual({
+			value: { option: "weekly" },
+			activeMs: 900,
+			changes: 0,
+		});
+		await twice({
+			...answer("often", { option: "rarely" }, undefined, 500),
+			position: "q:years",
+			save: mark("two"),
+		});
+		expect(await read(started)).toMatchObject({
+			answers: {
+				questions: { often: { value: { option: "rarely" }, activeMs: 1_400, changes: 1 } },
+			},
+			position: "q:years",
+		});
+		// The same answer once more, as another save: the person came back to the card.
+		await progress(started, {
+			...answer("often", { option: "rarely" }, undefined, 100),
+			save: mark("three"),
+		});
+		expect((await read(started)).answers.questions.often).toMatchObject({
+			activeMs: 1_500,
+			changes: 1,
+		});
+		expect(await rows("answer")).toContainEqual(
+			expect.objectContaining({
+				response_id: started.id,
+				question_id: "often",
+				save_id: mark("three"),
+			}),
+		);
+	});
+
+	it("takes back what a status closed when its save arrives twice, and nothing more", async () => {
+		const started = await start();
+		await progress(started, {
+			...answer("made", { option: "stopped" }, "rye-bread"),
+			save: "a".repeat(22),
+		});
+		await progress(started, {
+			...answer("stopped-why", { options: ["time"] }, "rye-bread", 700),
+			save: "b".repeat(22),
+		});
+		await progress(started, {
+			...answer("made", { option: "sometimes" }, "pita"),
+			save: "c".repeat(22),
+		});
+		const never = {
+			...answer("made", { option: "never" }, "rye-bread", 300),
+			save: "d".repeat(22),
+		};
+		expect((await progress(started, never)).status).toBe(200);
+		expect((await progress(started, never)).status).toBe(200);
+		expect((await read(started)).answers.items).toEqual({
+			"rye-bread": { made: { value: { option: "never" }, activeMs: 1_300, changes: 1 } },
+			pita: { made: { value: { option: "sometimes" }, activeMs: 1_000, changes: 0 } },
+		});
+	});
+
+	it("adds a save without a mark each time it arrives, as a page from before the marks expects", async () => {
+		const started = await start();
+		const body = answer("often", { option: "weekly" }, undefined, 900);
+		await progress(started, body);
+		await progress(started, body);
+		expect((await read(started)).answers.questions.often).toEqual({
+			value: { option: "weekly" },
+			activeMs: 1_800,
+			changes: 0,
+		});
+		const [row] = (await rows("answer")).filter((each) => each.response_id === started.id);
+		expect(row?.save_id).toBeNull();
+	});
+
+	it("refuses a mark that is not one, and stores nothing of that save", async () => {
+		const started = await start();
+		for (const save of [
+			"short",
+			"x".repeat(65),
+			"with a space in the middle",
+			1234567890123456,
+			null,
+		]) {
+			const response = await progress(started, { ...answer("often", { option: "weekly" }), save });
+			expect(response.status, String(save)).toBe(400);
+		}
+		expect((await read(started)).answers.questions).toEqual({});
+	});
+
 	it("brings a time that cannot be into range, and keeps the answer", async () => {
 		const started = await start();
 		// A tab left open for a week, a clock that ran backwards, and a fraction.

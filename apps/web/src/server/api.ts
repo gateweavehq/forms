@@ -12,6 +12,7 @@ import {
 	Refusal,
 	type ResponseRow,
 	readAnswers,
+	SAVE_MARK,
 	saveDetached,
 	saveProgress,
 	withdrawResponse,
@@ -41,6 +42,8 @@ const progressBody = z.strictObject({
 		})
 		.optional(),
 	position: z.string().min(1).max(160).optional(),
+	// The save's mark, from a page that makes them. A page from before them sends none.
+	save: z.string().regex(SAVE_MARK).optional(),
 });
 
 const detachedBody = z.strictObject({ answers: z.record(z.string().max(64), z.unknown()) });
