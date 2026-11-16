@@ -68,7 +68,7 @@ agent; the columns exist and are left empty.
   error code and, where it names one, a table, a column or a constraint of the schema. The
   reference is eight random characters, which the error page shows, so that a person's report
   finds the line. The statement is the SQL as it was sent, with a `?` wherever a value was,
-  cut at 600 characters. No value is in it: no answer, no kept-apart answer, no response's id
+  cut at 2,000 characters (each statement of a batch by itself). No value is in it: no answer, no kept-apart answer, no response's id
   or seal, no email address, no session token, and nothing the database itself said in other
   words. A read that failed for a moment and was sent again leaves
   `d1: a read failed (<name>) and is sent again (attempt N)`, which holds less. Better Auth

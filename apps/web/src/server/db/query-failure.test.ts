@@ -208,15 +208,40 @@ describe("a query that failed", () => {
 		const { database, state } = faulty(real);
 		const db = createDb(database);
 		state.failures = 1;
-		const ids = Array.from({ length: 400 }, (_, index) => `id-${index}`);
+		const ids = Array.from({ length: 1_000 }, (_, index) => `id-${index}`);
 
 		await thrownBy(() =>
 			db.select().from(schema.response).where(inArray(schema.response.id, ids)).all(),
 		);
 
 		const statement = failures()[0]?.statement ?? "";
-		expect(statement.length).toBe(601);
+		expect(statement.length).toBe(2_001);
 		expect(statement.endsWith("…")).toBe(true);
+	});
+
+	// A batch fails as one and logs all its statements. A long one must not hide those after
+	// it: each is cut by itself.
+	it("cuts each statement of a batch by itself, so that the ones after a long one are seen", async () => {
+		const { database, state } = faulty(real);
+		const db = createDb(database);
+		state.batchFailures = 1;
+		const long = Array.from({ length: 1_000 }, (_, index) => `?${index + 1}`).join(", ");
+
+		await thrownBy(() =>
+			runBatch(db, [
+				{
+					sql: `DELETE FROM answer WHERE response_id IN (${long})`,
+					params: Array.from({ length: 1_000 }, (_, index) => `id-${index}`),
+				},
+				{ sql: "DELETE FROM response WHERE id = ?1", params: ["id-0"] },
+			]),
+		);
+
+		const statement = failures()[0]?.statement ?? "";
+		expect(statement).toMatch(/^DELETE FROM answer WHERE response_id IN \(\?1, \?2, /);
+		expect(statement.endsWith("…; DELETE FROM response WHERE id = ?1")).toBe(true);
+		expect(statement.length).toBe(2_001 + "; DELETE FROM response WHERE id = ?1".length);
+		expect(logged()).not.toContain("id-0");
 	});
 
 	// What Cloudflare's D1 error list and SQLite say in fixed words, by a name each.

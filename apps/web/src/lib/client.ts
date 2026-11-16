@@ -40,6 +40,7 @@ export interface Progress {
 	/**
 	 * The mark of this save, which the queue gives it (`saveMark`): the same however often it is
 	 * sent, so that the server adds an answer's time once when a reply was lost on the way back.
+	 * It travels in a header (`sendProgress`), never in the body.
 	 */
 	save?: string;
 }
@@ -67,13 +68,19 @@ async function send(path: string, init: RequestInit): Promise<unknown> {
 	return response.json();
 }
 
-function post(path: string, body: unknown, secret?: string): Promise<unknown> {
+function post(
+	path: string,
+	body: unknown,
+	secret?: string,
+	headers: Record<string, string> = {},
+): Promise<unknown> {
 	return send(path, {
 		method: "POST",
 		headers: {
 			"Content-Type": "application/json",
 			// In a header, not the address: addresses end up in logs and histories.
 			...(secret ? { Authorization: `Bearer ${secret}` } : {}),
+			...headers,
 		},
 		body: JSON.stringify(body),
 		// Lets an answer given just before the tab closes still arrive.
@@ -103,8 +110,21 @@ export async function loadResponse(id: string, secret: string): Promise<Response
 	}
 }
 
+/**
+ * Sends one save. Its mark goes in a header and the body is what it has always been: the
+ * server reads the body strictly, and one from before the marks would refuse a key it does not
+ * know, which the queue takes for an answer that cannot be stored and drops. A page and the
+ * Worker that answers it can be of different versions while a deployment rolls out or back. A
+ * header an older Worker does not know is ignored, and the save is stored as it always was.
+ */
 export async function sendProgress(id: string, secret: string, progress: Progress): Promise<void> {
-	await post(`/api/responses/${encodeURIComponent(id)}/progress`, progress, secret);
+	const { save, ...body } = progress;
+	await post(
+		`/api/responses/${encodeURIComponent(id)}/progress`,
+		body,
+		secret,
+		save === undefined ? {} : { "X-Save": save },
+	);
 }
 
 const completedSchema = z.object({ canWithdraw: z.boolean() });

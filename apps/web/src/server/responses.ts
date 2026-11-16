@@ -219,11 +219,19 @@ function checkAnswer(
 }
 
 /**
- * A save's mark, as the page makes it: random, the same when the page sends the save again
- * because no reply came, and another for the next save. Only its shape is checked: it is
- * compared with what the answer's row holds and nothing else.
+ * A save's mark, exactly as the page makes it: 16 random bytes in hex. It is the same when the
+ * page sends the save again because no reply came, and another for the next save.
  */
-export const SAVE_MARK = /^[A-Za-z0-9_-]{16,64}$/;
+const SAVE_MARK = /^[0-9a-f]{32}$/;
+
+/**
+ * The mark a request came with, or none. Anything that is not a mark is none, and is never a
+ * reason to refuse: a save without a mark is stored as saves always were, so the worst a bad
+ * mark can do is let a time count twice. Refusing would lose the answer.
+ */
+export function saveMarkOf(given: string | null | undefined): string | undefined {
+	return given != null && SAVE_MARK.test(given) ? given : undefined;
+}
 
 /** A step's key, as the flow writes them. Stored as given: only the browser reads it back. */
 const POSITION = /^[sqif]:[a-z0-9_:-]{1,140}$/;
@@ -236,10 +244,10 @@ const POSITION = /^[sqif]:[a-z0-9_:-]{1,140}$/;
  * A save can arrive twice: the database commits it, the reply is lost, and the page, which
  * cannot tell that from a save that failed, sends it again. So the page marks each save
  * (`save`), and the answer's row keeps the mark of the save that last wrote it. A save whose
- * mark the row already has was applied: it adds no time and counts no change, and is answered
- * as it was the first time. A mark names one save, so what arrives under it a second time is
- * not read again. A save without a mark, from a page older than the marks, is added as it
- * always was.
+ * mark and value the row already has was applied: it writes nothing, deletes nothing, and is
+ * answered as it was the first time. Anything else is a save like any other: one without a
+ * mark, from a page older than the marks, and one whose mark the row has with another value,
+ * which no page of ours sends and which must not be answered "saved" without being stored.
  */
 export async function saveProgress(
 	db: Database,
@@ -296,11 +304,10 @@ export async function saveProgress(
 	// The answer is a value of the statement (`?4`), never part of its text: the text is what a
 	// failure logs.
 	// The update's own WHERE is what recognises a save that was applied before: the row has its
-	// mark already, so nothing of the row changes, its time least of all. A row with no mark
-	// (written before the column, or by an older page) and a save with none never match.
-	// The mark is written as `?7`, not `excluded.save_id`, to keep the text short: a failure
-	// logs the batch's text cut at 600 characters, and the statement after this one should
-	// still be seen to begin there.
+	// mark and its value already, so nothing of the row changes, its time least of all. A row
+	// with no mark (written before the column, or by an older page) and a save with none never
+	// match, and neither does a mark that comes with another value.
+	const mark = progress.save ?? null;
 	const upsert: Statement = {
 		sql: `INSERT INTO answer (response_id, question_id, item_id, value, active_ms, changes, updated_at, save_id)
 			SELECT ?1, ?2, ?3, ?4, ?5, 0, ?6, ?7
@@ -310,8 +317,9 @@ export async function saveProgress(
 				value = excluded.value,
 				active_ms = answer.active_ms + excluded.active_ms,
 				updated_at = excluded.updated_at,
-				save_id = ?7
-			WHERE ?7 IS NULL OR answer.save_id IS NOT ?7`,
+				save_id = excluded.save_id
+			WHERE excluded.save_id IS NULL OR answer.save_id IS NOT excluded.save_id
+				OR answer.value IS NOT excluded.value`,
 		params: [
 			row.id,
 			checked.questionId,
@@ -319,7 +327,7 @@ export async function saveProgress(
 			checked.value,
 			progress.answer.activeMs,
 			now,
-			progress.save ?? null,
+			mark,
 		],
 	};
 	const place: Statement = {
@@ -327,15 +335,22 @@ export async function saveProgress(
 			WHERE id = ?1 AND completed_at IS NULL`,
 		params: [row.id, now, progress.position ?? null],
 	};
+	// What the answer closes goes only with the answer. Each of these asks what the upsert asks:
+	// when the row already has this mark and this value, the save was applied before and is
+	// skipped, and a save that writes nothing deletes nothing either. That is why they run
+	// before the upsert, in the same batch: after it, the row has the mark whichever happened.
 	const taken = stale.map(
 		({ questionId, itemId }): Statement => ({
 			sql: `DELETE FROM answer WHERE response_id = ?1 AND question_id = ?2 AND item_id = ?3
-				AND EXISTS (SELECT 1 FROM response WHERE id = ?1 AND completed_at IS NULL)`,
-			params: [row.id, questionId, itemId],
+				AND EXISTS (SELECT 1 FROM response WHERE id = ?1 AND completed_at IS NULL)
+				AND (?4 IS NULL OR NOT EXISTS (SELECT 1 FROM answer
+					WHERE response_id = ?1 AND question_id = ?5 AND item_id = ?6
+						AND save_id IS ?4 AND value IS ?7))`,
+			params: [row.id, questionId, itemId, mark, checked.questionId, checked.itemId, checked.value],
 		}),
 	);
 	// Together or not at all: an answer without its place would resume one step behind.
-	const [, placed] = await runBatch(db, [upsert, place, ...taken]);
+	const placed = (await runBatch(db, [...taken, upsert, place])).at(-1);
 	if (placed === 0) throw new Refusal(409, "This response is complete.");
 }
 

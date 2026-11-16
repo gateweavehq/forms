@@ -371,12 +371,26 @@ something every export and count would have to remember. The rule is one functio
 again when no reply came, and the database may have committed it all the same: a 500 after
 the commit, a connection dropped on the way back. The page cannot tell the two apart, so the
 server does. The queue gives each save of an answer a mark when it is given (`saveMark`,
-`lib/client.ts`: 16 random bytes), sent as `save` beside the answer and the same on every
-sending. The answer's row keeps the mark of the save that last wrote it (`answer.save_id`),
-and the statement that writes the answer changes nothing when the row already has that
-mark: no time added, no change counted, the answer's own `updated_at` left alone.
-The rest of the batch runs as it did the first time (the position, the rows a status closed,
-each still asking whether the response is unfinished), and the reply is the same `saved`.
+`lib/client.ts`: 16 random bytes, as 32 hex characters), sent in the request's `X-Save` header
+and the same on every sending. The answer's row keeps the mark of the save that last wrote it
+(`answer.save_id`), and the statement that writes the answer changes nothing when the row
+already has that mark and that value: no time added, no change counted, the answer's own
+`updated_at` left alone. A save that writes nothing deletes nothing: the statements that take
+back what a status closed ask the same question, and run before the answer's in the same
+batch, since after it the row has the mark either way. The position is stored as always, and
+the reply is the same `saved`.
+
+- **In a header, and never a reason to refuse.** The body of a save is read strictly, and a
+  key it does not know is a 400, which the page's queue takes for an answer that cannot be
+  stored, and drops. A page and the Worker that answers it are of different versions while a
+  deployment rolls out, and after one is rolled back with a page still open; a mark in the
+  body would have had every answer of such a page refused. A header a Worker does not know is
+  one it does not read, so the body stays what every version takes
+  (`lib/client.test.ts` holds a new page's body against the rule as it was before the marks).
+  For the same reason a mark that is not exactly 32 hex characters is no mark, and the save
+  is stored as one without. The failure has one direction: a time counted twice, never an
+  answer lost. The address is the app's own, so no other origin is asked to allow the header,
+  and the replies are `no-store`.
 
 - **Random, not a count.** A number that only grows would have to be agreed between the
   devices a response is open on, each of which would count for itself, and found again by a
@@ -394,9 +408,12 @@ each still asking whether the response is unfinished), and the reply is the same
   next, and only then the first is sent again: that resend is taken for a new save, adds its
   time a second time and puts its answer back. It needs two devices on one question within
   the seconds a retry takes. Keeping every mark would catch it, at the price of a row per
-  save. And a mark names one save: an answer sent under the mark its row already has is not
-  read again, whatever it says. No page of ours sends one (the queue marks a save once and
-  never changes it), and a request that did would lose nothing but its own second answer.
+  save.
+- **A mark with another answer is a save like any other.** No page of ours sends a mark a
+  second time with a different value (the queue marks a save once and never changes it). A
+  request that does is stored, counted and takes back what it closes, as a save without a
+  mark would: it is answered `saved`, so it has to be, and only a save whose mark and value
+  the row both has is taken for one applied before.
 - **The other writes.** Completing twice changes nothing: the second finds the response
   complete and answers as the first did. Withdrawing twice deletes and counts once; the
   second request gets the 404 of a response that is not there, since nothing is kept that
@@ -489,9 +506,11 @@ run, with what is Forms' own said below.
   exists (so `const { DB } = env` fails too), and on a Drizzle database made elsewhere. Code
   that hides one of those behind another spelling gets past it, and a review has to catch it.
 - **The log has what the error leaves out**, once per failure: `d1: a query failed (<kind>),
-  reference <reference>: <statement>`. The statement is the text with its `?`, cut at 600
+  reference <reference>: <statement>`. The statement is the text with its `?`, cut at 2,000
   characters, never the values, on the two grounds above. A batch written by hand logs all its
-  statements; a batch of Drizzle's logs none.
+  statements, each cut by itself, so that a long one does not hide those after it; a batch of
+  Drizzle's logs none. The cut keeps a line a line and protects nothing: a text holds no
+  value at any length, and no statement is written to fit under it.
   The kind is D1's code at the start of its words, SQLite's at their end, a name for each thing
   D1 says in fixed words (the passing ones of `retry-reads.ts`, and `overloaded`,
   `queued-too-long`, `queue-full`, `cpu-reset`, `memory-reset`, `storage-timeout`,

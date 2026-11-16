@@ -737,12 +737,12 @@ test("counts an answer's time once when the server stored it and the reply was l
 	await forward(page);
 	// The first answer reaches the server, which stores it, and the page is told 500 instead:
 	// what a reply lost on the way back is to the page. Everything after goes through.
-	const sent: Array<{ save?: string; answer?: { activeMs: number } }> = [];
+	const sent: Array<{ mark: string | undefined; body: Record<string, unknown> }> = [];
 	let lost = false;
 	await page.route("**/api/responses/*/progress", async (route) => {
-		const body = route.request().postDataJSON() as (typeof sent)[number];
+		const body = route.request().postDataJSON() as Record<string, unknown>;
 		if (!body.answer) return route.continue();
-		sent.push(body);
+		sent.push({ mark: route.request().headers()["x-save"], body });
 		if (lost) return route.continue();
 		lost = true;
 		await route.fetch();
@@ -756,9 +756,11 @@ test("counts an answer's time once when the server stored it and the reply was l
 
 	// The page's queue sends it again by itself, the same save with the same mark.
 	await expect.poll(() => sent.length, { timeout: 15_000 }).toBe(2);
-	expect(sent[0]?.save).toMatch(/^[0-9a-f]{32}$/);
+	// The mark is in a header: the body is what a Worker of any version takes.
+	expect(sent[0]?.mark).toMatch(/^[0-9a-f]{32}$/);
+	expect(Object.keys(sent[0]?.body ?? {}).sort()).toEqual(["answer", "position"]);
 	expect(sent[1]).toEqual(sent[0]);
-	const once = sent[0]?.answer?.activeMs ?? 0;
+	const once = (sent[0]?.body.answer as { activeMs: number } | undefined)?.activeMs ?? 0;
 	expect(once).toBeGreaterThanOrEqual(400);
 	await expect.poll(async () => (await stored(page)).position).toBe("q:years");
 	expect((await stored(page)).answers.questions.often).toEqual({

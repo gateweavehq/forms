@@ -224,14 +224,15 @@ describe("a save without a mark, from a page older than the marks", () => {
 		await saveProgress(db, form.definition, row, { answer });
 		await saveProgress(db, form.definition, row, { answer });
 		expect(await stored(real, id)).toMatchObject([{ active_ms: 300 }]);
-		await saveProgress(db, form.definition, row, { answer, save: `${mark}-next` });
+		await saveProgress(db, form.definition, row, { answer, save: "f".repeat(32) });
 		expect(await stored(real, id)).toMatchObject([{ active_ms: 400, changes: 0 }]);
 	});
 });
 
 describe("a mark that arrives with another answer", () => {
 	// No page of ours sends one: the queue marks a save once and never changes what it holds.
-	it("is the save it names, which was applied: the first stands, on the same answer only", async () => {
+	// But the request is answered "saved", so the answer has to be: it is a save like any other.
+	it("is stored: only a save whose mark and answer the row both has was applied before", async () => {
 		const { db, form, row, id } = await begun(real, "tea-mark-reused");
 		const save = "0123456789abcdef0123456789abcdef";
 		await saveProgress(db, form.definition, row, {
@@ -243,7 +244,7 @@ describe("a mark that arrives with another answer", () => {
 			save,
 		});
 		expect(await stored(real, id)).toEqual([
-			{ question_id: "drink", value: '{"option":"yes"}', active_ms: 900, changes: 0 },
+			{ question_id: "drink", value: '{"option":"no"}', active_ms: 1_400, changes: 1 },
 		]);
 		// A row keeps its own last mark: the same mark on another question is a save of that one.
 		await saveProgress(db, form.definition, row, {
@@ -251,7 +252,7 @@ describe("a mark that arrives with another answer", () => {
 			save,
 		});
 		expect(await stored(real, id)).toEqual([
-			{ question_id: "drink", value: '{"option":"yes"}', active_ms: 900, changes: 0 },
+			{ question_id: "drink", value: '{"option":"no"}', active_ms: 1_400, changes: 1 },
 			{ question_id: "why", value: JSON.stringify(WHY), active_ms: 300, changes: 0 },
 		]);
 	});
@@ -289,7 +290,7 @@ describe("a response open on two devices", () => {
 		// test is here so that the limit is known, and changes only on purpose.
 		const response = await begun(real, "tea-two-devices-between");
 		const { db, form, row, id } = response;
-		const phone = { answer: { question: "why", value: WHY, activeMs: 900 }, save: "p".repeat(32) };
+		const phone = { answer: { question: "why", value: WHY, activeMs: 900 }, save: "a".repeat(32) };
 		const desk = {
 			answer: { question: "why", value: "No reason", activeMs: 700 },
 			save: "d".repeat(32),

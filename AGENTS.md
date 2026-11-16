@@ -58,9 +58,12 @@ silently.
 2. **The server decides.** Every answer is checked against the definition in
    `apps/web/src/server/responses.ts` before it is stored, and the server counts changes itself.
    What the browser checks is for the person's benefit only. The page's queue sends a save
-   again when no reply came, so a save applies once: the queue marks it (`save`), the
+   again when no reply came, so a save applies once: the queue marks it, the
    statement that writes the answer keeps the mark on the row (`answer.save_id`) and changes
-   nothing for a mark the row already has. A request without a mark is added as before.
+   nothing for a mark and value the row already has. The mark travels in the `X-Save` header,
+   never in the body, and one that is missing or malformed is no mark: a page and the Worker
+   can be of different versions, and the failure must be a time counted twice, never an
+   answer refused. Nothing new goes into the body of a save for the same reason.
 3. **A response's secret stays out of every address and log.** It lives in the fragment of the
    page's address and in the `Authorization` header. The database keeps a seal of it
    (`server/secret.ts`), checked with `crypto.subtle.verify`. Never put it in a path, a query, a

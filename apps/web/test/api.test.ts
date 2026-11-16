@@ -227,14 +227,24 @@ describe("saving answers as they are given", () => {
 	// requests with the same body are what that is to the server. (That the page's queue sends
 	// the same mark again, and what the database then does when it had committed the first, is
 	// tested with the queue itself in `src/server/resent-save.test.ts`.)
+	/** A mark as the page makes one: 32 hex characters. */
+	const mark = (letter: string) => letter.repeat(32);
+
+	/** A save with its mark where the page puts it: in a header, beside a body like any other. */
+	function marked(started: Started, body: unknown, save: string): Promise<Response> {
+		return post(`/api/responses/${started.id}/progress`, body, {
+			...bearer(started),
+			"X-Save": save,
+		});
+	}
+
 	it("stores a save that arrives twice with the same mark once: its time, its change and its answer", async () => {
 		const started = await start();
-		const mark = (name: string) => name.padEnd(22, "-");
-		const twice = async (body: Record<string, unknown>) => {
+		const twice = async (body: Record<string, unknown>, save: string) => {
 			const statuses: number[] = [];
 			const replies: unknown[] = [];
 			for (let sending = 0; sending < 2; sending++) {
-				const response = await progress(started, body);
+				const response = await marked(started, body, save);
 				statuses.push(response.status);
 				replies.push(await response.json());
 			}
@@ -242,17 +252,16 @@ describe("saving answers as they are given", () => {
 			expect(statuses).toEqual([200, 200]);
 			expect(replies).toEqual([{ saved: true }, { saved: true }]);
 		};
-		await twice({ ...answer("often", { option: "weekly" }, undefined, 900), save: mark("one") });
+		await twice(answer("often", { option: "weekly" }, undefined, 900), mark("1"));
 		expect((await read(started)).answers.questions.often).toEqual({
 			value: { option: "weekly" },
 			activeMs: 900,
 			changes: 0,
 		});
-		await twice({
-			...answer("often", { option: "rarely" }, undefined, 500),
-			position: "q:years",
-			save: mark("two"),
-		});
+		await twice(
+			{ ...answer("often", { option: "rarely" }, undefined, 500), position: "q:years" },
+			mark("2"),
+		);
 		expect(await read(started)).toMatchObject({
 			answers: {
 				questions: { often: { value: { option: "rarely" }, activeMs: 1_400, changes: 1 } },
@@ -260,10 +269,7 @@ describe("saving answers as they are given", () => {
 			position: "q:years",
 		});
 		// The same answer once more, as another save: the person came back to the card.
-		await progress(started, {
-			...answer("often", { option: "rarely" }, undefined, 100),
-			save: mark("three"),
-		});
+		await marked(started, answer("often", { option: "rarely" }, undefined, 100), mark("3"));
 		expect((await read(started)).answers.questions.often).toMatchObject({
 			activeMs: 1_500,
 			changes: 1,
@@ -272,34 +278,67 @@ describe("saving answers as they are given", () => {
 			expect.objectContaining({
 				response_id: started.id,
 				question_id: "often",
-				save_id: mark("three"),
+				save_id: mark("3"),
 			}),
 		);
 	});
 
 	it("takes back what a status closed when its save arrives twice, and nothing more", async () => {
 		const started = await start();
-		await progress(started, {
-			...answer("made", { option: "stopped" }, "rye-bread"),
-			save: "a".repeat(22),
-		});
-		await progress(started, {
-			...answer("stopped-why", { options: ["time"] }, "rye-bread", 700),
-			save: "b".repeat(22),
-		});
-		await progress(started, {
-			...answer("made", { option: "sometimes" }, "pita"),
-			save: "c".repeat(22),
-		});
-		const never = {
-			...answer("made", { option: "never" }, "rye-bread", 300),
-			save: "d".repeat(22),
-		};
-		expect((await progress(started, never)).status).toBe(200);
-		expect((await progress(started, never)).status).toBe(200);
+		await marked(started, answer("made", { option: "stopped" }, "rye-bread"), mark("a"));
+		await marked(
+			started,
+			answer("stopped-why", { options: ["time"] }, "rye-bread", 700),
+			mark("b"),
+		);
+		await marked(started, answer("made", { option: "sometimes" }, "pita"), mark("c"));
+		const never = answer("made", { option: "never" }, "rye-bread", 300);
+		expect((await marked(started, never, mark("d"))).status).toBe(200);
+		expect((await marked(started, never, mark("d"))).status).toBe(200);
 		expect((await read(started)).answers.items).toEqual({
 			"rye-bread": { made: { value: { option: "never" }, activeMs: 1_300, changes: 1 } },
 			pita: { made: { value: { option: "sometimes" }, activeMs: 1_000, changes: 0 } },
+		});
+	});
+
+	// No page of ours sends a mark again with another answer. A request that does is answered
+	// "saved", so it has to be: stored, with what it closes taken back, like any other save.
+	it("stores an answer that comes under a mark its row already has, when the answer is another", async () => {
+		const started = await start();
+		const same = mark("e");
+		await marked(started, answer("made", { option: "stopped" }, "rye-bread", 900), same);
+		await marked(started, answer("stopped-why", { options: ["time"] }, "rye-bread"), mark("f"));
+		const again = await marked(
+			started,
+			answer("made", { option: "never" }, "rye-bread", 500),
+			same,
+		);
+		expect(again.status).toBe(200);
+		expect((await read(started)).answers.items).toEqual({
+			"rye-bread": { made: { value: { option: "never" }, activeMs: 1_400, changes: 1 } },
+		});
+	});
+
+	// A save that was applied before writes nothing. So it deletes nothing either: what it
+	// closed went the first time, and what was stored since is not this request's to remove.
+	it("deletes nothing for a save it has applied before", async () => {
+		const started = await start();
+		const never = answer("made", { option: "never" }, "rye-bread", 300);
+		await marked(started, never, mark("a"));
+		// Stored although the status closes it: a save is not checked against the flow, and
+		// completing would take it back.
+		await marked(started, answer("stopped-why", { options: ["time"] }, "rye-bread"), mark("b"));
+		expect((await marked(started, never, mark("a"))).status).toBe(200);
+		expect((await read(started)).answers.items).toEqual({
+			"rye-bread": {
+				made: { value: { option: "never" }, activeMs: 300, changes: 0 },
+				"stopped-why": { value: { options: ["time"] }, activeMs: 1_000, changes: 0 },
+			},
+		});
+		// The same answer as a new save is one like any other, and takes back what it closes.
+		await marked(started, never, mark("c"));
+		expect((await read(started)).answers.items).toEqual({
+			"rye-bread": { made: { value: { option: "never" }, activeMs: 600, changes: 0 } },
 		});
 	});
 
@@ -317,19 +356,40 @@ describe("saving answers as they are given", () => {
 		expect(row?.save_id).toBeNull();
 	});
 
-	it("refuses a mark that is not one, and stores nothing of that save", async () => {
+	// The failure has one direction: a time counted twice, never an answer lost. So a mark that
+	// is not one is no reason to refuse: the save is stored as one without a mark is.
+	it("stores a save whose mark is not one, as a save without a mark", async () => {
 		const started = await start();
-		for (const save of [
+		const garbage = [
 			"short",
-			"x".repeat(65),
-			"with a space in the middle",
-			1234567890123456,
-			null,
-		]) {
-			const response = await progress(started, { ...answer("often", { option: "weekly" }), save });
-			expect(response.status, String(save)).toBe(400);
+			"x".repeat(33),
+			"0123456789ABCDEF0123456789ABCDEF",
+			"0123456789abcdef0123456789abcdeg",
+			"with a space in the middle, and more",
+			"'; DROP TABLE answer; --",
+			"",
+		];
+		for (const save of garbage) {
+			const response = await marked(
+				started,
+				answer("often", { option: "weekly" }, undefined, 100),
+				save,
+			);
+			expect(response.status, save).toBe(200);
+			expect(await response.json()).toEqual({ saved: true });
 		}
-		expect((await read(started)).answers.questions).toEqual({});
+		// Each was a save of its own, and so is one of them sent twice running: what is not a
+		// mark is not kept as one, however much it looks like one (capitals, here).
+		const almost = "0123456789ABCDEF0123456789ABCDEF";
+		await marked(started, answer("often", { option: "weekly" }, undefined, 100), almost);
+		await marked(started, answer("often", { option: "weekly" }, undefined, 100), almost);
+		expect((await read(started)).answers.questions.often).toEqual({
+			value: { option: "weekly" },
+			activeMs: 100 * (garbage.length + 2),
+			changes: 0,
+		});
+		const [row] = (await rows("answer")).filter((each) => each.response_id === started.id);
+		expect(row?.save_id).toBeNull();
 	});
 
 	it("brings a time that cannot be into range, and keeps the answer", async () => {
