@@ -328,7 +328,7 @@ export async function replaceDefinition(db: Database, row: FormRow, input: unkno
 	// Asked again by the statements: the form may have been opened or deleted since its row was
 	// read. A replace that loses writes nothing, its definition's row included.
 	const changed = await runBatch(
-		db.$client,
+		db,
 		replaceDefinitionStatements({
 			formId: row.id,
 			ownerId: row.ownerId,
@@ -513,7 +513,7 @@ async function allOrNothing(batch: () => Promise<unknown>): Promise<void> {
  */
 export async function deleteForm(db: Database, row: FormRow): Promise<void> {
 	await allOrNothing(() =>
-		runBatch(db.$client, deleteFormStatements({ id: row.id, ownerId: row.ownerId })),
+		runBatch(db, deleteFormStatements({ id: row.id, ownerId: row.ownerId })),
 	);
 }
 

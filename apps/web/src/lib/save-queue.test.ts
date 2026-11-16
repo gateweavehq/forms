@@ -104,6 +104,32 @@ describe("the save queue", () => {
 		expect(failing).toEqual([]);
 	});
 
+	// What the server answers when its database fails (`DatabaseError`): a 500, which is not a
+	// refusal. The answer was not stored, so it must stay first in line and be said to be failing.
+	it("keeps an answer the server failed to store, never as refused, and sends it when it can", async () => {
+		const { arrived, send, fail } = server();
+		const failing: boolean[] = [];
+		const refused: Array<string | undefined> = [];
+		const queue = new SaveQueue(
+			send,
+			(state) => failing.push(state),
+			(progress) => refused.push(progress.position),
+		);
+		fail(new RequestFailed(500));
+		queue.push({ position: "q:one" });
+		queue.push({ position: "q:two" });
+		await vi.advanceTimersByTimeAsync(1_000);
+		expect(arrived).toEqual([]);
+		expect(refused).toEqual([]);
+		expect(failing).toEqual([true, true]);
+
+		fail(undefined);
+		await vi.advanceTimersByTimeAsync(2_000);
+		expect(arrived).toEqual(["q:one", "q:two"]);
+		expect(refused).toEqual([]);
+		expect(failing).toEqual([true, true, false]);
+	});
+
 	it("is settled at once when nothing is waiting", async () => {
 		const queue = new SaveQueue(
 			server().send,

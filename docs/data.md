@@ -63,6 +63,26 @@ agent; the columns exist and are left empty.
   sent, and one line about entries of `SIGN_UP_ALLOW` it ignored. If you turn invocation logs
   on, Cloudflare records each request with its address (which contains a response's id) and
   what it knows about where the request came from. Leave them off.
+- **The log of a failed database query.** When a query fails, the Worker writes one line:
+  `d1: a query failed (<kind>), reference <reference>: <statement>`. The kind is the database's
+  error code and, where it names one, a table, a column or a constraint of the schema. The
+  reference is eight random characters, which the error page shows, so that a person's report
+  finds the line. The statement is the SQL as it was sent, with a `?` wherever a value was,
+  cut at 600 characters. No value is in it: no answer, no kept-apart answer, no response's id
+  or seal, no email address, no session token, and nothing the database itself said in other
+  words. A read that failed for a moment and was sent again leaves
+  `d1: a read failed (<name>) and is sent again (attempt N)`, which holds less. Better Auth
+  logs the same failure once more for an account's request, as the error it was given: the
+  reference and the kind. Tests hold all of this (`apps/web/test/query-failure.test.ts`,
+  `apps/web/src/server/db/query-failure.test.ts`).
+- **Logs written before that.** Until the version that added the line above, a failed query's
+  error held the statement and its values, and Better Auth logged it. A failed read of a
+  session put the session's token into the log, and a failed sign-in or sign-up the email
+  address; a failed page showed the form's id and the account's id to whoever had asked for
+  the page. A respondent's answers were not logged then either: their side wrote the error's
+  name only. If your deployment ran such a version, search its Workers Logs for
+  `Failed query:` to see whether it happened; a session whose token was logged can be ended by
+  deleting its row from `session`.
 - **Cloudflare's own records.** The network that carries a request sees its network address,
   and your Cloudflare account may keep analytics or firewall events about requests. The app
   does not control those. A rate-limiting rule at the edge (see

@@ -333,6 +333,9 @@ export const strings = {
 	error: {
 		title: "Something went wrong",
 		body: "This page could not be loaded.",
+		/** Before the reference a failure was logged under, which follows it and a full stop. */
+		reference:
+			"If it keeps happening, whoever runs this server can find it in the log under the reference",
 		retry: "Try again",
 	},
 	start: {
@@ -441,6 +444,8 @@ export const strings = {
 		historyTitle: "How long a deleted answer remains",
 		history: (days: number) =>
 			`Deleted means removed from the database as it is now. The database keeps its own history for up to ${days} days, from which whoever runs the server could bring back an earlier state. After that, what was deleted is gone from there too.`,
+		logTitle: "When the server fails",
+		log: "If the database fails while something of yours is being stored or read, the server notes it in its log, so that whoever runs it can find what went wrong: the kind of failure, a random reference, and the database command with a placeholder wherever a value was. Your answers are not in that note, and neither are the codes in your address or anything else you sent.",
 		print: "Print or save as PDF",
 		back: "Back to the form",
 	},

@@ -149,6 +149,16 @@ silently.
     `server/statements.ts` with a test that runs it in the losing order: the other request
     first, then the statement, against the migrated database. Do not test a race by hoping
     for one.
+22. **A statement's text holds no value.** Everything that asks D1 goes through `createDb`,
+    which logs a failed statement's text and throws an error without it ("When a query of D1
+    fails" in `docs/architecture.md`). An answer is a value of most writes, so values are
+    bound: no `sql.raw`, and a statement written by hand takes its values as `?1` and is sent
+    by `runBatch` or `readRows` (`server/db/index.ts`), never through `$client`. Never read a
+    database error's message to decide an answer, and never show or log Drizzle's own error.
+    A trigger that refuses with new words is added to `REFUSALS` in
+    `apps/web/src/server/db/query-failure.ts`. What the log of a failed query holds is said
+    to respondents (`strings.stored.log`) and to operators (`docs/data.md`): change it only
+    together with both.
 
 ## Code style
 
@@ -176,7 +186,10 @@ silently.
   written out beside them. Change a number there only with its working.
 - `apps/web` has unit tests in `src/` and Worker tests in `test/`. The Worker tests build the app
   and run it in workerd through Miniflare, with a migrated D1 database and no network; see
-  `test/forms-worker.ts`.
+  `test/forms-worker.ts`. To see what a failing database does, the unit tests in
+  `src/server/db/` put a failure in front of a real local D1 (`faulty-d1.ts`: the next
+  statement or the next batch is refused with words of the test's choosing), and the Worker
+  tests rename a table for the length of one request (`test/query-failure.test.ts`).
 - `apps/web/e2e` has the browser tests: Playwright drives Chromium against the production build
   (`vite preview`, port 4771, its own empty local database), once at 390 by 844 with touch and
   once in a desk window. The first time, run

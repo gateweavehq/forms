@@ -150,6 +150,9 @@ describe("the page that says what is stored", () => {
 		expect(html).toContain("sees that a response is gone from their list");
 		expect(html).toContain("may have looked at its answers before");
 		expect(html).not.toContain("says neither who nor when");
+		// What the log of a failed query holds, which `test/query-failure.test.ts` holds it to.
+		expect(html).toContain("the kind of failure, a random reference, and the database command");
+		expect(html).toContain("Your answers are not in that note");
 	});
 
 	it("leaves out what a form does not do", async () => {

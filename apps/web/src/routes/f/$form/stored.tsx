@@ -117,6 +117,11 @@ function StoredPage() {
 				<p>{t.history(historyDays)}</p>
 			</section>
 
+			<section className="flex flex-col gap-2">
+				<h2 className={heading}>{t.logTitle}</h2>
+				<p>{t.log}</p>
+			</section>
+
 			{/* What is on paper needs no buttons. */}
 			<div className="flex flex-wrap items-center gap-4 print:hidden">
 				<LiveButton onClick={() => window.print()}>{t.print}</LiveButton>
