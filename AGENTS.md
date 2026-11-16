@@ -152,8 +152,13 @@ silently.
 22. **A statement's text holds no value.** Everything that asks D1 goes through `createDb`,
     which logs a failed statement's text and throws an error without it ("When a query of D1
     fails" in `docs/architecture.md`). An answer is a value of most writes, so values are
-    bound: no `sql.raw`, and a statement written by hand takes its values as `?1` and is sent
-    by `runBatch` or `readRows` (`server/db/index.ts`), never through `$client`. Never read a
+    bound. A statement written by hand is sent by `runBatch` or `readRows`
+    (`server/db/index.ts`) and no other way, and they refuse one whose text is more than
+    `?1` to `?n` for its `n` values, SQL's words, the schema's names, `0`, `1` and a form's
+    quoted state (`server/db/hand-written.ts`): a new keyword is added to its list, never a
+    value to a text. That check is enforced on every send. The rest is searched for in the
+    source by `db/hand-written.test.ts` and is yours to keep: no `sql.raw`, no `$client` or
+    `session.client`, and the binding named only in `createDb(env.DB)`. Never read a
     database error's message to decide an answer, and never show or log Drizzle's own error.
     A trigger that refuses with new words is added to `REFUSALS` in
     `apps/web/src/server/db/query-failure.ts`. What the log of a failed query holds is said

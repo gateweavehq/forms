@@ -451,7 +451,9 @@ describe("a query that failed", () => {
 		expect(await db.select().from(schema.form).where(eq(schema.form.ownerId, "nobody"))).toEqual(
 			[],
 		);
-		expect(await readRows(db, { sql: "SELECT 1 AS n", params: [] })).toEqual([{ n: 1 }]);
+		expect(
+			await readRows(db, { sql: "SELECT id FROM form WHERE owner_id = ?1", params: ["nobody"] }),
+		).toEqual([]);
 		expect(printed).toEqual([]);
 	});
 });
@@ -743,7 +745,7 @@ describe("a respondent's answers", () => {
 			expect(failures()[0]?.statement).toMatch(
 				before === 0
 					? / from "response" where /
-					: /^SELECT a\.response_id, .* FROM response r JOIN answer a /,
+					: /^SELECT answer\.response_id, .* FROM response JOIN answer ON /,
 			);
 		}
 

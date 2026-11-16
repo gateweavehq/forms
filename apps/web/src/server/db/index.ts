@@ -1,5 +1,6 @@
 import { drizzle } from "drizzle-orm/d1";
 import type { Statement } from "../statements";
+import { refuseValues } from "./hand-written";
 import { handWritten, withoutStatements } from "./query-failure";
 import { retryingReads } from "./retry-reads";
 import * as schema from "./schema";
@@ -22,14 +23,17 @@ export { schema };
 
 // The two ways a statement written by hand is sent. They are the only code that reaches for the
 // D1 binding under Drizzle (`$client`), so that a failure of theirs is thrown and logged like
-// any other query's, and a read of theirs is sent again like any other read:
-// `db/hand-written.test.ts` fails when another file reaches for it.
+// any other query's, and a read of theirs is sent again like any other read. Both refuse a
+// statement whose text could hold a value (`hand-written.ts`), since the text is what a failure
+// logs. `db/hand-written.test.ts` reads the source for another file that reaches for the binding.
 
 /**
  * Runs statements as one batch: together or not at all. Returns how many rows each changed. A
  * batch is sent once, whatever fails: it holds writes.
  */
 export async function runBatch(db: Database, statements: Statement[]): Promise<number[]> {
+	// Before anything is sent: one statement that could hold a value stops the whole batch.
+	for (const statement of statements) refuseValues(statement);
 	const d1 = db.$client;
 	const results = await handWritten(
 		statements.map(({ sql }) => sql),
@@ -39,7 +43,9 @@ export async function runBatch(db: Database, statements: Statement[]): Promise<n
 }
 
 /** The rows a `SELECT` written by hand gives. */
-export async function readRows<Row>(db: Database, { sql, params }: Statement): Promise<Row[]> {
+export async function readRows<Row>(db: Database, statement: Statement): Promise<Row[]> {
+	refuseValues(statement);
+	const { sql, params } = statement;
 	const { results } = await handWritten([sql], () =>
 		db.$client
 			.prepare(sql)

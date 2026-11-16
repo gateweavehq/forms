@@ -429,14 +429,30 @@ run, with what is Forms' own said below.
   with numbered values, and the exports read answers in pages by hand. They are sent by
   `runBatch` and `readRows` (`db/index.ts`) and by nothing else: the two reach for the D1
   binding under Drizzle, through the wrapper that resends reads, and throw and log a failure
-  as a `DatabaseError` with the statements' text. A test (`db/hand-written.test.ts`) fails
-  when another file reaches for the binding, uses `sql.raw`, or makes a Drizzle database of
-  its own, and when one of those statements has a value in its text.
+  as a `DatabaseError` with the statements' text.
+- **A statement written by hand whose text could hold a value is not sent.** Such a statement
+  is a string, and `WHERE response_id = '${id}'` works as well as `?1` does and would log the
+  id. So `runBatch` and `readRows` read each text first (`db/hand-written.ts`) and throw,
+  before the database or a log sees it and without repeating it, unless all of it is: a
+  placeholder `?1` to `?n` for exactly the `n` values bound, none left out; a word of SQL from
+  a list in that file, or the name of a table or column of the schema; `0` or `1`, which the
+  statements count and compare with, every other number being bound (`LIMIT ?6`); a form's
+  state in quotes (`'open'`), the one thing they quote; and spaces and `( ) , . = < > + *`.
+  One refused statement stops its whole batch. This holds in whichever file a statement is
+  written, since there is no other way to send one. What it cannot see is a value that is
+  itself one of those: a `0`, a `1`, a quoted `open`, or an id spelled like a column's name.
+- **What is enforced, and how firmly.** The check above runs on every statement written by
+  hand, every time one is sent. Drizzle's builders and its `sql` template bind what they are
+  given, which is Drizzle's doing. The ways around both are looked for by a test that reads
+  the source (`db/hand-written.test.ts`), and that is a search of text, not a proof: it fails
+  on `sql.raw`, on `$client`, `.prepare(`, `.client` or `session` reached by key or `Reflect`
+  outside `db/`, on the binding named anywhere but in `createDb(env.DB)` and the check that it
+  exists (so `const { DB } = env` fails too), and on a Drizzle database made elsewhere. Code
+  that hides one of those behind another spelling gets past it, and a review has to catch it.
 - **The log has what the error leaves out**, once per failure: `d1: a query failed (<kind>),
   reference <reference>: <statement>`. The statement is the text with its `?`, cut at 600
-  characters, never the values: the app writes no value into a statement's text (no `sql.raw`;
-  a `sql` template binds what it is given; a statement written by hand takes `?1`), which has
-  to stay so. A batch written by hand logs all its statements; a batch of Drizzle's logs none.
+  characters, never the values, on the two grounds above. A batch written by hand logs all its
+  statements; a batch of Drizzle's logs none.
   The kind is D1's code at the start of its words, SQLite's at their end, a name for each thing
   D1 says in fixed words (the passing ones of `retry-reads.ts`, and `overloaded`,
   `queued-too-long`, `queue-full`, `cpu-reset`, `memory-reset`, `storage-timeout`,
@@ -457,9 +473,12 @@ run, with what is Forms' own said below.
   failure of the server's with a 500 and the same sentence as before, and logs the error's
   name. The page's queue (`lib/save-queue.ts`) keeps an answer that got a 500 and sends it
   again, and the page says meanwhile that saving is failing; only a refusal (a 4xx) is dropped
-  and said. A
-  save is one batch, so an answer that failed is not half stored, and sent again it is stored
-  once.
+  and said. A save is one batch, so an answer that failed is not half stored. A save whose
+  batch the database did commit, with only the reply lost, is sent again like any other: it
+  leaves one row and counts no change (`changes`), because the value is the same, but the time
+  the question was on screen (`active_ms`) is added a second time. That is older than this
+  code and not changed by it. The queue is in the page's memory: an answer still waiting when
+  the tab is closed during an outage is lost, as it was before.
 - **A page shows no error's message.** `RouteError` says that the page could not be loaded,
   and the reference if the failure has one, which it looks for in the error's causes too. A
   server function's error crosses to the browser as its message alone, so one whose reference
@@ -469,8 +488,14 @@ run, with what is Forms' own said below.
   whoever is not its owner fails, or does not, at the same statement for both.
 
 None of what `query-failure.ts` reaches for is in Drizzle's public types. With a session it
-does not know, `createDb` throws as the Worker starts, and with a prepared query sent some
-other way, at the first query: either is better than the statements being in the errors again.
+does not know, `createDb` throws wherever it is called, and with a prepared query sent some
+other way, at the first query. The Worker itself still starts: the respondent's API makes its
+database per request, so every respondent's request then answers its usual 500 sentence, and
+`server/auth`, which makes the owner's database as it loads, is imported inside handlers, so
+every owner's request fails at that import. Every test fails with it, which is where an
+upgrade of Drizzle should stop. Either is better than the statements being in the errors
+again, but it is an outage: answers the pages hold wait in their queues, and one waiting in a
+tab that is closed meanwhile is lost.
 A deployment without a database (a branch's Preview) is left as Drizzle made it, so it starts
 and answers its 503. The schema generator's configuration (`auth/cli.ts`) asks nothing, and
 makes its database without `createDb`, which refuses a stand-in that is no binding.

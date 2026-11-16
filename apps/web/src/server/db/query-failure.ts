@@ -102,9 +102,10 @@ const STATEMENT_LENGTH = 600;
 
 /**
  * Makes the error for what D1 said, and logs it once, with the statement if there was one: the
- * text with its `?`, as it was sent, never the values. The app writes no value into a statement's
- * text (no `sql.raw`, `sql` templates bind what they are given, and the statements written by
- * hand take theirs as `?1`), so the text is the code's own.
+ * text with its `?`, as it was sent, never the values. Drizzle binds what its builders and
+ * `sql` templates are given, and a statement written by hand is not sent unless its text is
+ * placeholders, SQL and the schema's names (`hand-written.ts`). `sql.raw` would break this, and
+ * only a test that reads the source looks for it.
  */
 function failed(cause: unknown, statement?: string): DatabaseError {
 	const error = new DatabaseError(kindOf(cause), newReference());
@@ -178,10 +179,14 @@ const UNREACHABLE = "so a failed query would carry its values";
  * what fails before a batch is sent, while it is put together, is not the database's and is
  * thrown as it is.
  *
- * None of this is in Drizzle's public types. If a version has no such session, this throws when
- * the Worker starts, since `server/auth` makes the database as it loads, and in every test. If a
- * prepared query is no longer sent by any of the four methods, it throws at the first query.
- * Either is better than the statements being in the errors again.
+ * None of this is in Drizzle's public types. If a version has no such session, this throws
+ * wherever the database is made, and in every test. The Worker still starts: the respondent's
+ * API makes its database per request, so each of its requests answers the usual 500 sentence,
+ * and `server/auth`, which makes one as it loads, is imported inside handlers, so each owner's
+ * request fails at that import. If a prepared query is no longer sent by any of the four
+ * methods, it throws at the first query. Either is better than the statements being in the
+ * errors again, but it is an outage, and an answer waiting in a page's queue is lost if its tab
+ * closes meanwhile, as in any outage.
  */
 export function withoutStatements<Db extends object>(db: Db): Db {
 	const session: unknown = Reflect.get(db, "session");

@@ -79,11 +79,12 @@ export async function loadRecords(
 	let after: [string, string, string] = ["", "", ""];
 	for (;;) {
 		const results = await readRows<AnswerRow>(db, {
-			sql: `SELECT a.response_id, a.question_id, a.item_id, a.value, a.active_ms, a.changes
-				FROM response r JOIN answer a ON a.response_id = r.id
-				WHERE r.form_id = ?1 AND r.definition_hash = ?2
-					AND (a.response_id, a.question_id, a.item_id) > (?3, ?4, ?5)
-				ORDER BY a.response_id, a.question_id, a.item_id
+			sql: `SELECT answer.response_id, answer.question_id, answer.item_id, answer.value,
+					answer.active_ms, answer.changes
+				FROM response JOIN answer ON answer.response_id = response.id
+				WHERE response.form_id = ?1 AND response.definition_hash = ?2
+					AND (answer.response_id, answer.question_id, answer.item_id) > (?3, ?4, ?5)
+				ORDER BY answer.response_id, answer.question_id, answer.item_id
 				LIMIT ?6`,
 			params: [row.id, hash, ...after, PAGE],
 		});
