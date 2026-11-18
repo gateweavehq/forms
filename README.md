@@ -134,7 +134,9 @@ as stored apart. Only import forms you have the right to use.
 | `examples/`             | Made-up forms, served in development and in tests                                                          |
 | `docs/`                 | [Architecture](docs/architecture.md), [self-hosting](docs/self-hosting.md), [what is stored](docs/data.md) |
 
-Guidance for contributors and coding agents is in [AGENTS.md](AGENTS.md).
+Guidance for contributors and coding agents is in [AGENTS.md](AGENTS.md). See also
+[Contributing](CONTRIBUTING.md), the [Code of Conduct](CODE_OF_CONDUCT.md), the
+[Security policy](SECURITY.md) and the [Changelog](CHANGELOG.md).
 
 ## Settings
 
