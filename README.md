@@ -1,4 +1,8 @@
-# Gateweave Forms
+<p align="center">
+  <img src=".github/logo.svg" width="96" height="96" alt="">
+</p>
+
+<h1 align="center">Gateweave Forms</h1>
 
 Surveys and forms whose job is that people finish the long ones. Open source (AGPL-3.0), and built
 to run as one Cloudflare Worker, like the rest of the Gateweave family.
