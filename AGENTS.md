@@ -184,8 +184,9 @@ silently.
   run (`0001_definitions.sql` says why at its top). Keep the snapshot Drizzle Kit wrote.
 - Dependencies are pinned to exact versions. Shared ones go in the `catalog:` of
   `pnpm-workspace.yaml`. `drizzle-orm` stays on 0.45, as in the sibling repositories, while 1.0
-  is a release candidate; its folder per migration is no obstacle, since Wrangler reads it
-  through `migrations_pattern`.
+  is a release candidate. Moving later is its own change: Wrangler reads 1.0's folder per
+  migration through `migrations_pattern`, but the names each D1 has recorded and the tests'
+  migration loader would have to follow.
 - UI code copied into the repository must come from an MIT or Apache-2.0 source, with the source
   and its copyright notice in a comment at the top of the file. Nothing is copied in so far.
 
