@@ -183,8 +183,9 @@ silently.
   everything under `apps/web/migrations/`, except a migration whose generated statements cannot
   run (`0001_definitions.sql` says why at its top). Keep the snapshot Drizzle Kit wrote.
 - Dependencies are pinned to exact versions. Shared ones go in the `catalog:` of
-  `pnpm-workspace.yaml`. `drizzle-orm` stays on 0.45, as in the sibling repositories: the 1.0
-  migration format does not work with Wrangler's D1 migrations.
+  `pnpm-workspace.yaml`. `drizzle-orm` stays on 0.45, as in the sibling repositories, while 1.0
+  is a release candidate; its folder per migration is no obstacle, since Wrangler reads it
+  through `migrations_pattern`.
 - UI code copied into the repository must come from an MIT or Apache-2.0 source, with the source
   and its copyright notice in a comment at the top of the file. Nothing is copied in so far.
 
