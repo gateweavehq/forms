@@ -54,6 +54,13 @@
 	// The top level is what a self-hoster deploys. Gateweave's own staging is the environment
 	// below: a separate Worker with its own database, kept in the EU (the database was created
 	// with the `eu` jurisdiction). Bindings are not inherited, so it repeats them.
+	// Gateweave's deployments follow Track's convention: this public file names the environment,
+	// its Worker, its custom domain and its database's id (the id of a resource, which grants
+	// nothing), and nothing that names the account. The Cloudflare account id is the repository
+	// variable CLOUDFLARE_ACCOUNT_ID and the API token a secret of the repository
+	// (.github/workflows/deploy.yml); a zone is found by Cloudflare from the custom domain. The
+	// top level has no `database_id` here: a self-hoster's is made on the first deploy, and
+	// whatever Gateweave keeps for its own is kept outside this repository.
 	"env": {
 		"staging": {
 			"name": "gateweave-forms-staging",

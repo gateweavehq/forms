@@ -11,6 +11,7 @@
 		"dev": "pnpm --filter @gateweave/forms-web dev",
 		"dev:setup": "pnpm --filter @gateweave/forms-web dev:setup",
 		"build": "pnpm -r build",
+		"deploy": "pnpm --filter @gateweave/forms-web run deploy",
 		"wrangler": "pnpm --filter @gateweave/forms-web exec wrangler --cwd ../..",
 		"typecheck": "pnpm -r typecheck",
 		"test": "pnpm -r test",
@@ -19,6 +20,16 @@
 		"check": "biome check",
 		"format": "biome check --write",
 		"verify": "pnpm check && pnpm typecheck && pnpm test && pnpm build"
+	},
+	"cloudflare": {
+		"bindings": {
+			"DB": {
+				"description": "Holds accounts, forms and responses. Choose **Create new** unless you are moving an existing Forms."
+			},
+			"BETTER_AUTH_SECRET": {
+				"description": "Signs the sessions of the people who run forms. Use a long random string, for example from `openssl rand -base64 32`, and keep it secret."
+			}
+		}
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.6.6",

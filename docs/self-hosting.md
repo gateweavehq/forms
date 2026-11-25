@@ -21,21 +21,55 @@ after listing yours. The README says more about both.
 
 ## Deploying
 
-The scripts in `apps/web/package.json` deploy Gateweave's own staging environment
-(`deploy:staging`, `db:migrate:staging`). For your own, do the same four steps against the top
-level of `wrangler.jsonc`, in this order:
+### What has been verified
+
+Nothing here has been run against a real Cloudflare account by the people who wrote it for a
+self-hosted deployment. What has been run: the build, the check that refuses a build serving the
+example forms, and the migrations against a local D1 database, all in this repository's checks.
+Gateweave's own staging is deployed from this repository's staging scripts (the order below,
+written for an environment). **Not verified:** `pnpm run deploy` itself on a fresh account (the
+database's creation, the first secret, the migrations that follow), and the "Deploy to
+Cloudflare" button, which can only be tried once the repository is public. If a step fails for
+you, the commands under "By hand" are the same steps one at a time.
+
+### First deploy, step by step
+
+You need a Cloudflare account, Node.js 24 and pnpm 12.
+
+1. **Get the code and install**: clone the repository, then `pnpm install`.
+2. **Sign in to Cloudflare**: `pnpm wrangler login`. In a script, set `CLOUDFLARE_API_TOKEN` and
+   `CLOUDFLARE_ACCOUNT_ID` instead; the token needs permission to edit Workers and D1.
+3. **Deploy**: `pnpm run deploy` (`run` is needed: `pnpm deploy` is a built-in command). It
+   builds, refuses a build that serves the example forms, applies the migrations and deploys.
+   The first time, there is no database yet, so Wrangler creates `gateweave-forms` while it
+   deploys and the migrations follow straight after; a Worker that does not exist yet also gets
+   a random `BETTER_AUTH_SECRET`, which is never shown. Every later run applies the migrations
+   first, so that the new code never meets an old schema.
+4. **Set the rest**: in the Worker's settings in the dashboard, add `BETTER_AUTH_URL` (the
+   address the Worker was deployed to) and `SIGN_UP_ALLOW` (your own address), then sign up
+   straight away. `keep_vars` keeps what you set through later deploys.
+5. **Set the edge rules** below, which need a domain of your own.
+
+The top level of `wrangler.jsonc` is what this deploys. To deploy an environment of it, set
+`CLOUDFLARE_ENV` first.
+
+### By hand
 
 1. **Build**: `pnpm build`.
 2. **Check the build**: `node apps/web/scripts/check-deploy.mjs apps/web/dist/server/wrangler.json`.
-   It refuses a build that serves the example forms, which a build made for the browser tests
-   does.
 3. **Migrate the database**: `pnpm wrangler d1 migrations apply DB --remote`. Before the
    deploy, so that the new code never runs against a database that lacks a column it reads.
+   On the very first deploy the database does not exist yet: deploy first, then migrate.
 4. **Deploy**: `pnpm wrangler deploy`.
 
 `pnpm wrangler` runs the pinned Wrangler from the repository root, where `wrangler.jsonc` is.
-These steps are the staging scripts' own, written out for the top level of the configuration;
-only the staging environment is deployed from this repository so far.
+
+### Gateweave's own environments
+
+Gateweave's staging is deployed by `.github/workflows/deploy.yml` after every green build of
+`main`, as Track's is: the staging environment in `wrangler.jsonc` names its Worker, its domain
+and its database's id, and the account is the repository variable `CLOUDFLARE_ACCOUNT_ID`. A
+fork has no credentials, so the workflow does nothing there.
 
 A form cannot be opened for answers until its definition names who runs it (`controller`: a
 name and a way to reach them), which a form's Settings page can fill in. A form that was
