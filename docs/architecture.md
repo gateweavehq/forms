@@ -648,7 +648,7 @@ built. A study that needs more than "not named" should collect contact details s
 
 ### Why the cards behave as they do
 
-The research is summarised in the plan (FRM-1 on the board); the design rules it led to:
+The research is summarised in the project's plan; the design rules it led to:
 
 | Rule                                                      | Because                                                                                      |
 | --------------------------------------------------------- | -------------------------------------------------------------------------------------------- |

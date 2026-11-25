@@ -45,6 +45,13 @@ of each item, and a two-question feedback form. Create an account at `/login` an
 to my account" to see their results as well. Do that before answering one: an example that was
 answered while it belonged to nobody cannot be added, like any id with answers under it.
 
+## Deploy
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/gateweavehq/forms)
+
+One Worker and one D1 database on your own Cloudflare account. [docs/self-hosting.md](docs/self-hosting.md)
+has the steps and says what has been verified.
+
 ## Run a form
 
 1. **Bring it in** at `/forms/new`: paste or upload a definition, or the page of a form you have
@@ -158,9 +165,9 @@ No email is sent yet, so no address can be verified. That shapes the list:
 - A listed address belongs to whoever signs up with it first. **Sign up straight after listing
   your address.**
 
-Deploy with `pnpm --filter @gateweave/forms-web deploy:staging` (or a script like it), not with
-`wrangler deploy` on a build of your own: the script checks that the build does not serve the
-example forms, which a build made for the browser tests does.
+Deploy with `pnpm run deploy`, not with `wrangler deploy` on a build of your own: the script
+checks that the build does not serve the example forms, which a build made for the browser tests
+does, and applies the migrations first.
 
 [docs/self-hosting.md](docs/self-hosting.md) has the order of a deploy and the rate-limiting
 rules to set at Cloudflare's edge, which the app relies on and cannot set itself.
@@ -170,4 +177,4 @@ restored.
 
 ## Licence
 
-[AGPL-3.0-only](LICENSE).
+[AGPL-3.0-only](LICENSE). Contributions are accepted under the [Contributor License Agreement](CLA.md).

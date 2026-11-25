@@ -1,0 +1,46 @@
+name: Deploy
+
+# Gateweave Cloud's deploy of Forms: every green build of main goes to staging, the way Track's
+# does. Forks skip it: they have no Cloudflare credentials. The account is named by the repository
+# variable CLOUDFLARE_ACCOUNT_ID and the token is a secret, so neither is in a file. Until that
+# variable is set, the job is skipped instead of failing.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+jobs:
+  staging:
+    if: >-
+      github.repository == 'gateweavehq/forms' &&
+      vars.CLOUDFLARE_ACCOUNT_ID != '' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://forms-staging.gateweave.com
+    concurrency: deploy-staging
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Migrations first, so the new code never meets an old schema.
+      - name: Apply D1 migrations
+        run: pnpm --filter @gateweave/forms-web db:migrate:staging
+      - name: Deploy
+        run: pnpm --filter @gateweave/forms-web deploy:staging

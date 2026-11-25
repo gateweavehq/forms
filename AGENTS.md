@@ -23,7 +23,7 @@ storage or anything a respondent sees.
 | `apps/web`              | The Worker: TanStack Start pages, Better Auth, the APIs, D1 through Drizzle |
 | `examples/`             | Made-up forms, served at `/f/<id>` only where `FORMS_EXAMPLES` is `"1"`     |
 | `docs/`                 | Architecture, self-hosting, and what a deployment stores (`data.md`)        |
-| `.github/workflows/`    | CI: `check` (`pnpm verify`) and `e2e` (the browser tests)                   |
+| `.github/workflows/`    | CI: `check` (`pnpm verify`), `e2e`; the CLA check; staging Deploy           |
 | `wrangler.jsonc`        | The Worker's config, at the root as in the sibling repositories             |
 
 ## Commands
@@ -41,6 +41,7 @@ Requirements: Node.js 24 (see `.node-version`) and pnpm 12. Run from the reposit
 | `pnpm test:e2e`     | Build, then run the browser tests (Playwright, Chromium) on port 4771               |
 | `pnpm build`        | Production build                                                                    |
 | `pnpm verify`       | check, typecheck, test, build                                                       |
+| `pnpm run deploy`   | Build, check the build, migrate D1 and deploy (`docs/self-hosting.md`)              |
 | `pnpm import:tally` | Import a Tally form's page data (`--out`, `--accept-differences`, `--detach-email`) |
 
 Scope a command to one package with `pnpm --filter <name> <script>`, for example
