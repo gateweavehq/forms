@@ -23,7 +23,7 @@ storage or anything a respondent sees.
 | `apps/web`              | The Worker: TanStack Start pages, Better Auth, the APIs, D1 through Drizzle |
 | `examples/`             | Made-up forms, served at `/f/<id>` only where `FORMS_EXAMPLES` is `"1"`     |
 | `docs/`                 | Architecture, self-hosting, and what a deployment stores (`data.md`)        |
-| `.github/workflows/`    | CI: `check` (`pnpm verify`), `e2e`; the CLA check; staging Deploy       |
+| `.github/workflows/`    | CI: `check` (`pnpm verify`), `e2e`; the CLA check; staging Deploy           |
 | `wrangler.jsonc`        | The Worker's config, at the root as in the sibling repositories             |
 
 ## Commands
