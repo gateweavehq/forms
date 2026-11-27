@@ -1,9 +1,9 @@
 name: Deploy
 
 # Gateweave Cloud's deploy of Forms: every green build of main goes to staging, the way Track's
-# does. Forks skip it: they have no Cloudflare credentials. The account is named by the repository
-# variable CLOUDFLARE_ACCOUNT_ID and the token is a secret, so neither is in a file. Until that
-# variable is set, the job is skipped instead of failing.
+# does. Forks skip it: they have no Cloudflare credentials. The account id (CLOUDFLARE_ACCOUNT_ID)
+# and the token are repository secrets, so neither is in a file and run logs mask both. A job's
+# `if:` cannot read secrets, so the job is not gated on them: without them, it fails.
 on:
   workflow_run:
     workflows: [CI]
@@ -21,7 +21,6 @@ jobs:
   staging:
     if: >-
       github.repository == 'gateweavehq/forms' &&
-      secrets.CLOUDFLARE_ACCOUNT_ID != '' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
