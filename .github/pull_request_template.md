@@ -16,4 +16,4 @@
 
 - [ ] Adds a generated D1 migration (commit it; never edit one that has been merged)
 - [ ] Adds an environment variable or secret (document it in `.dev.vars.example` and
-  `docs/self-hosting.md`; declare a required secret in `wrangler.jsonc`)
+      `docs/self-hosting.md`; declare a required secret in `wrangler.jsonc`)
