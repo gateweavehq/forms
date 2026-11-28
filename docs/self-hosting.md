@@ -68,7 +68,7 @@ The top level of `wrangler.jsonc` is what this deploys. To deploy an environment
 
 Gateweave's staging is deployed by `.github/workflows/deploy.yml` after every green build of
 `main`, as Track's is: the staging environment in `wrangler.jsonc` names its Worker, its domain
-and its database's id, and the account is the repository variable `CLOUDFLARE_ACCOUNT_ID`. A
+and its database's id, and the account id is the repository secret `CLOUDFLARE_ACCOUNT_ID`. A
 fork has no credentials, so the workflow does nothing there.
 
 A form cannot be opened for answers until its definition names who runs it (`controller`: a
